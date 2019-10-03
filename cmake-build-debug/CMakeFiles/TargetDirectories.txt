@@ -1,3 +1,0 @@
-/home/pstadler/CLionProjects/fb/cmake-build-debug/CMakeFiles/rebuild_cache.dir
-/home/pstadler/CLionProjects/fb/cmake-build-debug/CMakeFiles/fb.dir
-/home/pstadler/CLionProjects/fb/cmake-build-debug/CMakeFiles/edit_cache.dir
