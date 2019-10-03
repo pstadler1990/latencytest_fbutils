@@ -10,15 +10,14 @@ int main() {
         return 1;
     } else {
         /* Frame buffer is opened */
-        for(uint32_t x = 0; x < 320; x++) {
-           for(uint32_t y = 0; y < 240; y++) {
-               if(y % 3) {
-                   fb_put_pixel(&framebuf_device, 0, 0, COLOR_RED);
-               } else {
-                   fb_put_pixel(&framebuf_device, 0, 0, COLOR_GREEN);
-               }
-           }
-        }
+        uint32_t w = framebuf_device.w;
+        uint32_t h = framebuf_device.h;
+
+        fb_draw_line(&framebuf_device, 0, 0, w, h, COLOR_WHITE);
+        fb_draw_line(&framebuf_device, w, 0, 0, h, COLOR_WHITE);
+
+        fb_draw_rect(&framebuf_device, 0, 0, w / 2, h / 2, COLOR_WHITE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+
         fb_close(&framebuf_device);
     }
 

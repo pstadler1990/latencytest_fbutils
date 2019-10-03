@@ -16,7 +16,7 @@
 // https://docs.huihoo.com/doxygen/linux/kernel/3.7/include_2uapi_2linux_2fb_8h_source.html
 
 __always_inline static uint32_t _get_memory_location(const struct FbDev* fb_device, uint32_t ox, uint32_t oy);
-
+static void _put_pixel(const struct FbDev* fb_device, uint32_t x, uint32_t y, uint32_t color);
 
 int8_t
 fb_init(const char* fb_dev_id, struct FbDev* fb_device) {
@@ -53,6 +53,8 @@ fb_init(const char* fb_dev_id, struct FbDev* fb_device) {
         return -1;
     }
 
+    memset(fb_device->fbuf, 0, finfo.smem_len);
+
     return 1;
 }
 
@@ -63,8 +65,56 @@ fb_close(struct FbDev* fb_device) {
     close(fb_device->fb_fd);
 }
 
+/* Convenient helper functions for drawing */
 void
-fb_put_pixel(const struct FbDev* fb_device, uint32_t x, uint32_t y, uint32_t color) {
+fb_draw_line(const struct FbDev* fb_device, int32_t xfrom, int32_t yfrom, int32_t xto, int32_t yto, uint32_t color) {
+    /* Draws a line based on the Bresenham algorithm from xfrom, yfrom to xto, yto with the specified color (see "Color palette for this application")
+       Implementation details: https://de.wikipedia.org/wiki/Bresenham-Algorithmus */
+    int32_t dx = abs(xto - xfrom);
+    int32_t sx = xfrom < xto ? 1 : -1;
+    int32_t dy = -abs(yto - yfrom);
+    int32_t sy = yfrom < yto ? 1 : -1;
+    int32_t err = dx + dy;
+    int32_t err_t;
+
+    while(1) {
+        _put_pixel(fb_device, (uint32_t) xfrom, (uint32_t) yfrom, color);
+        if(xfrom == xto && yfrom == yto) {
+            break;
+        }
+        err_t = 2 * err;
+        if (err_t > dy) {
+            err += dy;
+            xfrom += sx;
+        }
+        if(err_t < dx) {
+            err += dx;
+            yfrom += sy;
+        }
+    }
+}
+
+void
+fb_draw_rect(const struct FbDev* fb_device, uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color, uint32_t flags) {
+    /* Draws a rectangle at x,y with width and height w,h in the specified color.
+       You can pass optional flags - otherwise choose DRAW_CENTER_NONE - to center the drawing.
+       If you pass any flag or both of DRAW_CENTER_VERTICAL or DRAW_CENTER_HORIZONTAL, x and / or y coordinate is discarded */
+    if(flags & DRAW_CENTER_HORIZONTAL) {
+        x = (fb_device->w / 2) - (w / 2);
+    }
+    if(flags & DRAW_CENTER_VERTICAL) {
+        y = (fb_device->h / 2) - (h / 2);
+    }
+
+    for(uint32_t _x = x; _x < (x + w); _x++) {
+        for(uint32_t _y = y; _y < (y + h); _y++) {
+            _put_pixel(fb_device, _x, _y, color);
+        }
+    }
+}
+
+void
+_put_pixel(const struct FbDev* fb_device, uint32_t x, uint32_t y, uint32_t color) {
     /* Puts a pixel of given RGBa color (find some pre-defined colors in Color palette)
        at display screen coordinates x, y */
     if(x < fb_device->w && y < fb_device->h) {
