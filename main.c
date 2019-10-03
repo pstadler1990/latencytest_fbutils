@@ -15,7 +15,7 @@ int main() {
                 fb_put_pixel(&framebuf_device, x, y);
             }
         }
-        //fb_close(&framebuf_device);
+        fb_close(&framebuf_device);
     }
 
     return 0;
