@@ -11,9 +11,13 @@ int main() {
     } else {
         /* Frame buffer is opened */
         for(uint32_t x = 0; x < 320; x++) {
-            for(uint32_t y = 0; y < 240; y++) {
-                fb_put_pixel(&framebuf_device, x, y);
-            }
+           for(uint32_t y = 0; y < 240; y++) {
+               if(y % 3) {
+                   fb_put_pixel(&framebuf_device, 0, 0, COLOR_RED);
+               } else {
+                   fb_put_pixel(&framebuf_device, 0, 0, COLOR_GREEN);
+               }
+           }
         }
         fb_close(&framebuf_device);
     }
