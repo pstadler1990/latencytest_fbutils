@@ -10,7 +10,7 @@ int main() {
         return 1;
     } else {
         /* Frame buffer is opened */
-
+        fb_put_pixel(&framebuf_device, 30, 30);
 
         fb_close(&framebuf_device);
     }

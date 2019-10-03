@@ -9,10 +9,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <memory.h>
 
 // https://gist.github.com/FredEckert/3425429
 // https://www.kernel.org/doc/Documentation/fb/api.txt
 // https://docs.huihoo.com/doxygen/linux/kernel/3.7/include_2uapi_2linux_2fb_8h_source.html
+__always_inline static uint32_t _get_memory_location(const struct FbDev* fb_device, uint32_t ox, uint32_t oy);
+
 
 int8_t
 fb_init(const char* fb_dev_id, struct FbDev* fb_device) {
@@ -57,4 +60,16 @@ fb_close(struct FbDev* fb_device) {
     /* Release frame buffer resources */
     munmap(fb_device->fbuf, fb_device->memlen);
     close(fb_device->fb_fd);
+}
+
+void
+fb_put_pixel(const struct FbDev* fb_device, uint32_t x, uint32_t y /*, color */) {
+    uint32_t mloc = _get_memory_location(fb_device, x, y);
+    memset(fb_device->fbuf + mloc, 0xFF, 1);
+}
+
+uint32_t
+_get_memory_location(const struct FbDev *fb_device, uint32_t ox, uint32_t oy) {
+    // https://www.i-programmer.info/programming/cc/12839-applying-c-framebuffer-graphics.html
+    return ox * fb_device->bpp / 8 + oy * fb_device->linelen;
 }

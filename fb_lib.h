@@ -20,5 +20,6 @@ struct FbDev {
 
 int8_t fb_init(const char* fb_dev_id, struct FbDev* fb_device);
 void fb_close(struct FbDev* fb_device);
+void fb_put_pixel(const struct FbDev* fb_device, uint32_t x, uint32_t y);
 
 #endif //FB_FB_LIB_H
