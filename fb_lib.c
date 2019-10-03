@@ -65,7 +65,8 @@ fb_close(struct FbDev* fb_device) {
 void
 fb_put_pixel(const struct FbDev* fb_device, uint32_t x, uint32_t y /*, color */) {
     uint32_t mloc = _get_memory_location(fb_device, x, y);
-    memset(fb_device->fbuf + mloc, 0xFF, 1);
+    //memset(fb_device->fbuf + mloc, 0xFF, 1);
+    *((uint32_t*) (fb_device->fbuf + mloc)) = 0xFFFFFFFF;
 }
 
 uint32_t

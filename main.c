@@ -10,9 +10,12 @@ int main() {
         return 1;
     } else {
         /* Frame buffer is opened */
-        fb_put_pixel(&framebuf_device, 30, 30);
-
-        fb_close(&framebuf_device);
+        for(uint32_t x = 0; x < 320; x++) {
+            for(uint32_t y = 0; y < 240; y++) {
+                fb_put_pixel(&framebuf_device, x, y);
+            }
+        }
+        //fb_close(&framebuf_device);
     }
 
     return 0;
