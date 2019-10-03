@@ -1,0 +1,36 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/pstadler/CLionProjects/fb/fb_lib.c
+fb_lib.h
+/home/pstadler/CLionProjects/fb/fb_lib.h
+linux/fb.h
+-
+sys/ioctl.h
+-
+sys/mman.h
+-
+fcntl.h
+-
+stdio.h
+-
+stdlib.h
+-
+unistd.h
+-
+
+/home/pstadler/CLionProjects/fb/fb_lib.h
+stdint.h
+-
+
+/home/pstadler/CLionProjects/fb/main.c
+stdio.h
+-
+fb_lib.h
+/home/pstadler/CLionProjects/fb/fb_lib.h
+

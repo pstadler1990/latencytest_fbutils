@@ -1,0 +1,1 @@
+/usr/bin/cc -g   CMakeFiles/fb.dir/main.c.o CMakeFiles/fb.dir/fb_lib.c.o  -o fb 
