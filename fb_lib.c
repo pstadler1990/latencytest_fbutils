@@ -10,7 +10,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-
 // https://gist.github.com/FredEckert/3425429
 // https://www.kernel.org/doc/Documentation/fb/api.txt
 // https://docs.huihoo.com/doxygen/linux/kernel/3.7/include_2uapi_2linux_2fb_8h_source.html
@@ -35,11 +34,9 @@ fb_init(const char* fb_dev_id, struct FbDev* fb_device) {
         return -1;
     }
 
-    printf("%s %d\n", finfo.id, finfo.line_length);
+    printf("Display name: %s\nLine length: %d\nDispay width: %d\nDisplay height: %d\nColor depth: %d\n", finfo.id, finfo.line_length, vinfo.xres, vinfo.yres, vinfo.bits_per_pixel);
 
     /* Copy important screen information to the frame buffer device */
-
-
     fb_device->w = vinfo.xres;
     fb_device->h = vinfo.yres;
     fb_device->bpp = vinfo.bits_per_pixel;
