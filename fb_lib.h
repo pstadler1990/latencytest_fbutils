@@ -20,7 +20,7 @@
 #define DRAW_CENTER_HORIZONTAL  ((uint32_t)0x2)
 #define DRAW_CENTER_NONE        ((uint32_t)0x0)
 
-/* Font paddings */
+/* Font padding */
 #define FONT_PADDING    ((uint32_t)0)   /* in pixels */
 
 #define CHAR_NONE   ((uint32_t)59)      /* Use empty char (offset 59) generated in the font file as none char */
@@ -34,11 +34,14 @@ struct FbDev {
     uint32_t bpp;       /* Bits per pixel (color depth) */
     uint32_t linelen;   /* Pre-calculated horizontal length */
     uint32_t memlen;    /* Pre-calculated memory size */
-    char* fbuf;         /* Holds mapped memory */
+    char* fbuf;         /* Mapped memory (front buffer) */
+    char* bbuf;         /* Mapped memory (back buffer) */
 };
 
 int8_t fb_init(const char* fb_dev_id, struct FbDev* fb_device);
 void fb_close(struct FbDev* fb_device);
+void fb_clear_screen(struct FbDev* fb_device);
+void fb_update(struct FbDev* fb_device);
 void fb_draw_line(const struct FbDev* fb_device, int32_t xfrom, int32_t yfrom, int32_t xto, int32_t yto, uint32_t color);
 void fb_draw_rect(const struct FbDev* fb_device, uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color, uint32_t flags);
 void fb_draw_text(const struct FbDev* fb_device, const char* text, uint32_t x, uint32_t y, uint32_t color, uint32_t flags);

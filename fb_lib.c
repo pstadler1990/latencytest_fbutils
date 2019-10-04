@@ -15,7 +15,6 @@
 // https://gist.github.com/FredEckert/3425429
 // https://www.kernel.org/doc/Documentation/fb/api.txt
 // https://docs.huihoo.com/doxygen/linux/kernel/3.7/include_2uapi_2linux_2fb_8h_source.html
-
 __always_inline static uint32_t _get_memory_location(const struct FbDev* fb_device, uint32_t ox, uint32_t oy);
 static void _put_pixel(const struct FbDev* fb_device, uint32_t x, uint32_t y, uint32_t color);
 static void _put_char(const struct FbDev* fb_device, char c, uint32_t x, uint32_t y, uint32_t color);
@@ -53,8 +52,13 @@ fb_init(const char* fb_dev_id, struct FbDev* fb_device) {
         return -1;
     }
 
-    memset(fb_device->fbuf, 0, finfo.smem_len);
+    // https://stackoverflow.com/a/51810565/1794026
+    fb_device->bbuf = (char *)mmap(0, finfo.smem_len, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if(!fb_device->bbuf) {
+        return -1;
+    }
 
+    fb_clear_screen(fb_device);
     return 1;
 }
 
@@ -62,7 +66,13 @@ void
 fb_close(struct FbDev* fb_device) {
     /* Release frame buffer resources */
     munmap(fb_device->fbuf, fb_device->memlen);
+    munmap(fb_device->bbuf, fb_device->memlen);
     close(fb_device->fb_fd);
+}
+
+void
+fb_clear_screen(struct FbDev* fb_device) {
+    memset(fb_device->bbuf, 0, fb_device->memlen);
 }
 
 /* Convenient helper functions for drawing */
@@ -139,6 +149,13 @@ fb_draw_text(const struct FbDev* fb_device, const char* text, uint32_t x, uint32
 }
 
 void
+fb_update(struct FbDev* fb_device) {
+    /* Copies backbuffer to frontbuffer */
+    memcpy(fb_device->fbuf, fb_device->bbuf, fb_device->memlen);
+    fb_clear_screen(fb_device);
+}
+
+void
 _put_char(const struct FbDev* fb_device, char c, uint32_t x, uint32_t y, uint32_t color) {
     /* Low-level function to plot a character c at coordinates x,y,
        based on the monochrome xbm file format,
@@ -188,11 +205,11 @@ _put_pixel(const struct FbDev* fb_device, uint32_t x, uint32_t y, uint32_t color
        at display screen coordinates x, y */
     if(x < fb_device->w && y < fb_device->h) {
         uint32_t mloc = _get_memory_location(fb_device, x, y);
-        *((uint32_t*) (fb_device->fbuf + mloc)) = color;
+        *((uint32_t*) (fb_device->bbuf + mloc)) = color;
     }
 }
 
 uint32_t
-_get_memory_location(const struct FbDev *fb_device, uint32_t ox, uint32_t oy) {
+_get_memory_location(const struct FbDev* fb_device, uint32_t ox, uint32_t oy) {
     return ox * fb_device->bpp / 8 + oy * fb_device->linelen;
 }
