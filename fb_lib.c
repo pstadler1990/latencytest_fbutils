@@ -155,8 +155,8 @@ _put_char(const struct FbDev* fb_device, char c, uint32_t x, uint32_t y, uint32_
             /* Put pixel if bit is set */
             if(((byte >> xbit) & 1)) {
                 _put_pixel(fb_device, x + xpro, y, color);
-		        _put_pixel(fb_device, x + xpro - 1, y, color);
-		        _put_pixel(fb_device, x + xpro + 1, y, color);
+                _put_pixel(fb_device, x + xpro - 1, y, color);
+                _put_pixel(fb_device, x + xpro + 1, y, color);
             }
             xbit += 1;
             xpro += 1;
