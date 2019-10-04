@@ -117,6 +117,7 @@ fb_draw_rect(const struct FbDev* fb_device, uint32_t x, uint32_t y, uint32_t w, 
 
 void
 fb_draw_text(const struct FbDev* fb_device, const char* text, uint32_t x, uint32_t y, uint32_t color, uint32_t flags) {
+    /* High-level function to render given text at coordinates x,y with the specified color */
     if(flags & DRAW_CENTER_HORIZONTAL) {
         uint32_t w = (uint32_t) strlen(text) * (FONT_WIDTH + 2 * FONT_PADDING);
         x = (fb_device->w / 2) - (w / 2);
@@ -128,24 +129,30 @@ fb_draw_text(const struct FbDev* fb_device, const char* text, uint32_t x, uint32
 
     for(char c = 0; c < strlen(text); c++) {
         unsigned char c_offset_real = (unsigned char) (text[c] - FONT_CHAR_START);
+        if(c_offset_real == 0xFF) {
+            /* In case the character is not available in the font file, use defined non-char character */
+            c_offset_real = CHAR_NONE;
+        }
         uint32_t char_x = x + (c * (FONT_WIDTH + 2 * FONT_PADDING));
-
         _put_char(fb_device, c_offset_real, char_x, y);
     }
 }
 
 void
 _put_char(const struct FbDev* fb_device, char c, uint32_t x, uint32_t y) {
-    uint32_t xbit = 0, ybit = 0;
-    uint32_t xreq = 7, yreq = 0;
-    uint32_t xpro = 0, ypro = 0;
+    /* Low-level function to plot a character c at coordinates x,y,
+       based on the monochrome xbm file format,
+       refer to https://en.wikipedia.org/wiki/X_BitMap for further information */
+    uint32_t xbit = 0;
+    uint32_t xreq = FONT_WIDTH - 1;
+    uint32_t xpro = 0;
+    unsigned char byte;
 
     uint32_t cur_char = 0;
     while(cur_char <= 34) {
-        unsigned char byte = chars[c][cur_char];
+        byte = chars[c][cur_char];
 
-        while (xreq) {
-
+        while(xreq) {
             unsigned char b = (unsigned char) ((byte >> xbit) & 1);
             if(b) {
                 _put_pixel(fb_device, x + xpro, y, COLOR_WHITE);
@@ -160,25 +167,21 @@ _put_char(const struct FbDev* fb_device, char c, uint32_t x, uint32_t y) {
                 xreq -= 1;
             }
 
-            if(xpro == FONT_WIDTH || xreq == 0) {
-                xreq = 7;
+            if(xpro == 8) {
+                /* Has processed 8 bits (full byte), proceed with next byte */
                 xpro = 0;
-                /* New line */
-                printf("\n");
-                y += 1;
-
-                break;
+                xbit = 0;
+                cur_char += 1;
+                byte = chars[c][cur_char];
             }
         }
-        if(xbit + 1 > 7) {
-            xreq = FONT_WIDTH - xbit;
-            cur_char += 1;
-            xbit = 0;
-        } else {
-            if(!xreq) {
-                xreq = FONT_WIDTH - xpro;
-            }
-        }
+        /* New line */
+        cur_char += 1;
+        xreq = FONT_WIDTH - 1;
+        xpro = 0;
+        xbit = 0;
+        printf("\n");
+        y += 1;
     }
 }
 

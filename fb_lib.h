@@ -21,7 +21,9 @@
 #define DRAW_CENTER_NONE        ((uint32_t)0x0)
 
 /* Font paddings */
-#define FONT_PADDING    ((uint32_t)2) /* in pixels */
+#define FONT_PADDING    ((uint32_t)2)   /* in pixels */
+
+#define CHAR_NONE   ((uint32_t)59)      /* Use empty char (offset 59) generated in the font file as none char */
 
 /* FbDev holds all required (essential) information
    for further screen drawing operations */
