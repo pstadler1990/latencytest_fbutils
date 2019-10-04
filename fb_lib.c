@@ -2,7 +2,7 @@
 // Created by pstadler on 02.10.19.
 //
 #include "fb_lib.h"
-#include "font.h"
+#include "font_monospaced16px.h"
 #include <linux/fb.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
@@ -18,7 +18,7 @@
 
 __always_inline static uint32_t _get_memory_location(const struct FbDev* fb_device, uint32_t ox, uint32_t oy);
 static void _put_pixel(const struct FbDev* fb_device, uint32_t x, uint32_t y, uint32_t color);
-static void _put_char(const struct FbDev* fb_device, char c, uint32_t x, uint32_t y);
+static void _put_char(const struct FbDev* fb_device, char c, uint32_t x, uint32_t y, uint32_t color);
 
 int8_t
 fb_init(const char* fb_dev_id, struct FbDev* fb_device) {
@@ -39,8 +39,6 @@ fb_init(const char* fb_dev_id, struct FbDev* fb_device) {
         || (ioctl(fb_device->fb_fd, FBIOGET_VSCREENINFO, &vinfo) == -1)) {
         return -1;
     }
-
-    printf("Display name: %s\nLine length: %d\nDispay width: %d\nDisplay height: %d\nColor depth: %d\n", finfo.id, finfo.line_length, vinfo.xres, vinfo.yres, vinfo.bits_per_pixel);
 
     /* Copy important screen information to the frame buffer device */
     fb_device->w = vinfo.xres;
@@ -100,12 +98,12 @@ void
 fb_draw_rect(const struct FbDev* fb_device, uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color, uint32_t flags) {
     /* Draws a rectangle at x,y with width and height w,h in the specified color.
        You can pass optional flags - otherwise choose DRAW_CENTER_NONE - to center the drawing.
-       If you pass any flag or both of DRAW_CENTER_VERTICAL or DRAW_CENTER_HORIZONTAL, x and / or y coordinate is discarded */
+       If you pass any flag or both of DRAW_CENTER_VERTICAL or DRAW_CENTER_HORIZONTAL, x and / or y coordinate are added as offsets */
     if(flags & DRAW_CENTER_HORIZONTAL) {
-        x = (fb_device->w / 2) - (w / 2);
+        x = ((fb_device->w / 2) - (w / 2)) + x;
     }
     if(flags & DRAW_CENTER_VERTICAL) {
-        y = (fb_device->h / 2) - (h / 2);
+        y = ((fb_device->h / 2) - (h / 2)) + y;
     }
 
     for(uint32_t _x = x; _x < (x + w); _x++) {
@@ -117,14 +115,16 @@ fb_draw_rect(const struct FbDev* fb_device, uint32_t x, uint32_t y, uint32_t w, 
 
 void
 fb_draw_text(const struct FbDev* fb_device, const char* text, uint32_t x, uint32_t y, uint32_t color, uint32_t flags) {
-    /* High-level function to render given text at coordinates x,y with the specified color */
+    /* High-level function to render given text at coordinates x,y with the specified color,
+       You can pass optional flags - otherwise choose DRAW_CENTER_NONE - to center the drawing.
+       If you pass any flag or both of DRAW_CENTER_VERTICAL or DRAW_CENTER_HORIZONTAL, x and / or y coordinate are added as offsets */
     if(flags & DRAW_CENTER_HORIZONTAL) {
         uint32_t w = (uint32_t) strlen(text) * (FONT_WIDTH + 2 * FONT_PADDING);
-        x = (fb_device->w / 2) - (w / 2);
+        x = ((fb_device->w / 2) - (w / 2)) + x;
     }
     if(flags & DRAW_CENTER_VERTICAL) {
         uint32_t h = FONT_HEIGHT;
-        y = (fb_device->h / 2) - (h / 2);
+        y = ((fb_device->h / 2) - (h / 2)) + y;
     }
 
     for(char c = 0; c < strlen(text); c++) {
@@ -134,31 +134,29 @@ fb_draw_text(const struct FbDev* fb_device, const char* text, uint32_t x, uint32
             c_offset_real = CHAR_NONE;
         }
         uint32_t char_x = x + (c * (FONT_WIDTH + 2 * FONT_PADDING));
-        _put_char(fb_device, c_offset_real, char_x, y);
+        _put_char(fb_device, c_offset_real, char_x, y, color);
     }
 }
 
 void
-_put_char(const struct FbDev* fb_device, char c, uint32_t x, uint32_t y) {
+_put_char(const struct FbDev* fb_device, char c, uint32_t x, uint32_t y, uint32_t color) {
     /* Low-level function to plot a character c at coordinates x,y,
        based on the monochrome xbm file format,
        refer to https://en.wikipedia.org/wiki/X_BitMap for further information */
     uint32_t xbit = 0;
-    uint32_t xreq = FONT_WIDTH - 1;
+    uint32_t xreq = FONT_WIDTH;
     uint32_t xpro = 0;
     unsigned char byte;
 
     uint32_t cur_char = 0;
     while(cur_char <= 34) {
         byte = chars[c][cur_char];
-
         while(xreq) {
-            unsigned char b = (unsigned char) ((byte >> xbit) & 1);
-            if(b) {
-                _put_pixel(fb_device, x + xpro, y, COLOR_WHITE);
-                printf("x");
-            } else {
-                printf(" ");
+            /* Put pixel if bit is set */
+            if(((byte >> xbit) & 1)) {
+                _put_pixel(fb_device, x + xpro, y, color);
+		        _put_pixel(fb_device, x + xpro - 1, y, color);
+		        _put_pixel(fb_device, x + xpro + 1, y, color);
             }
             xbit += 1;
             xpro += 1;
@@ -169,18 +167,17 @@ _put_char(const struct FbDev* fb_device, char c, uint32_t x, uint32_t y) {
 
             if(xpro == 8) {
                 /* Has processed 8 bits (full byte), proceed with next byte */
+                xbit = (FONT_WIDTH - xpro) - 1;
                 xpro = 0;
-                xbit = 0;
                 cur_char += 1;
                 byte = chars[c][cur_char];
             }
         }
         /* New line */
         cur_char += 1;
-        xreq = FONT_WIDTH - 1;
+        xreq = FONT_WIDTH;
         xpro = 0;
         xbit = 0;
-        printf("\n");
         y += 1;
     }
 }
