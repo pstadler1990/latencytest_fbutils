@@ -5,4 +5,6 @@
 #ifndef FB_SCREENS_H
 #define FB_SCREENS_H
 
+void draw_screen_home(struct FbDev* fb_device);
+
 #endif //FB_SCREENS_H
