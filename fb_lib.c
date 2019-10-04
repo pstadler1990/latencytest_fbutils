@@ -2,6 +2,7 @@
 // Created by pstadler on 02.10.19.
 //
 #include "fb_lib.h"
+#include "font.h"
 #include <linux/fb.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
@@ -17,6 +18,7 @@
 
 __always_inline static uint32_t _get_memory_location(const struct FbDev* fb_device, uint32_t ox, uint32_t oy);
 static void _put_pixel(const struct FbDev* fb_device, uint32_t x, uint32_t y, uint32_t color);
+static void _put_char(const struct FbDev* fb_device, char c, uint32_t x, uint32_t y);
 
 int8_t
 fb_init(const char* fb_dev_id, struct FbDev* fb_device) {
@@ -109,6 +111,73 @@ fb_draw_rect(const struct FbDev* fb_device, uint32_t x, uint32_t y, uint32_t w, 
     for(uint32_t _x = x; _x < (x + w); _x++) {
         for(uint32_t _y = y; _y < (y + h); _y++) {
             _put_pixel(fb_device, _x, _y, color);
+        }
+    }
+}
+
+void
+fb_draw_text(const struct FbDev* fb_device, const char* text, uint32_t x, uint32_t y, uint32_t color, uint32_t flags) {
+    if(flags & DRAW_CENTER_HORIZONTAL) {
+        uint32_t w = (uint32_t) strlen(text) * (FONT_WIDTH + 2 * FONT_PADDING);
+        x = (fb_device->w / 2) - (w / 2);
+    }
+    if(flags & DRAW_CENTER_VERTICAL) {
+        uint32_t h = FONT_HEIGHT;
+        y = (fb_device->h / 2) - (h / 2);
+    }
+
+    for(char c = 0; c < strlen(text); c++) {
+        unsigned char c_offset_real = (unsigned char) (text[c] - FONT_CHAR_START);
+        uint32_t char_x = x + (c * (FONT_WIDTH + 2 * FONT_PADDING));
+
+        _put_char(fb_device, c_offset_real, char_x, y);
+    }
+}
+
+void
+_put_char(const struct FbDev* fb_device, char c, uint32_t x, uint32_t y) {
+    uint32_t xbit = 0, ybit = 0;
+    uint32_t xreq = 7, yreq = 0;
+    uint32_t xpro = 0, ypro = 0;
+
+    uint32_t cur_char = 0;
+    while(cur_char <= 34) {
+        unsigned char byte = chars[c][cur_char];
+
+        while (xreq) {
+
+            unsigned char b = (unsigned char) ((byte >> xbit) & 1);
+            if(b) {
+                _put_pixel(fb_device, x + xpro, y, COLOR_WHITE);
+                printf("x");
+            } else {
+                printf(" ");
+            }
+            xbit += 1;
+            xpro += 1;
+
+            if(xreq > 0) {
+                xreq -= 1;
+            }
+
+            if(xpro == FONT_WIDTH || xreq == 0) {
+                xreq = 7;
+                xpro = 0;
+                /* New line */
+                printf("\n");
+                y += 1;
+
+                break;
+            }
+        }
+        if(xbit + 1 > 7) {
+            xreq = FONT_WIDTH - xbit;
+            cur_char += 1;
+            xbit = 0;
+        } else {
+            if(!xreq) {
+                xreq = FONT_WIDTH - xpro;
+            }
         }
     }
 }

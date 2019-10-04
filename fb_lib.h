@@ -20,6 +20,9 @@
 #define DRAW_CENTER_HORIZONTAL  ((uint32_t)0x2)
 #define DRAW_CENTER_NONE        ((uint32_t)0x0)
 
+/* Font paddings */
+#define FONT_PADDING    ((uint32_t)2) /* in pixels */
+
 /* FbDev holds all required (essential) information
    for further screen drawing operations */
 struct FbDev {
@@ -36,5 +39,5 @@ int8_t fb_init(const char* fb_dev_id, struct FbDev* fb_device);
 void fb_close(struct FbDev* fb_device);
 void fb_draw_line(const struct FbDev* fb_device, int32_t xfrom, int32_t yfrom, int32_t xto, int32_t yto, uint32_t color);
 void fb_draw_rect(const struct FbDev* fb_device, uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color, uint32_t flags);
-
+void fb_draw_text(const struct FbDev* fb_device, const char* text, uint32_t x, uint32_t y, uint32_t color, uint32_t flags);
 #endif //FB_FB_LIB_H
