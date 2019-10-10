@@ -3,6 +3,7 @@
 #include "screens.h"
 #include "main.h"
 #include "configuration.h"
+#include "pinsetup.h"
 
 struct FbDevState framebuf_state = {
         .state = FBSTATE_INITIALIZE,
@@ -18,10 +19,14 @@ int main() {
         return 1;
     } else {
         /* Frame buffer is opened */
+        if(!init_GPIOs()) {
+            perror("Could not open GPIOs, exit");
+        }
+
         framebuf_state.state = FBSTATE_IDLE;
 
         /* Show home screen until external triggers occur (i.e. start button pressed) */
-        draw_screen_home(&framebuf_device);
+        //draw_screen_home(&framebuf_device);
 
         fb_close(&framebuf_device);
     }
