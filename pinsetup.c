@@ -20,14 +20,11 @@ init_GPIOs(void) {
 
     /* Configure pins for exchange with external uC (STM8) */
     gpioSetMode(GPIO_EXT_TRIGGER_IN, PI_INPUT);
-    gpioSetISRFunc(GPIO_EXT_TRIGGER_IN, FALLING_EDGE, -1, _trigger_in_isr);
+    // gpioSetISRFunc(GPIO_EXT_TRIGGER_IN, FALLING_EDGE, -1, _trigger_in_isr);
 
     /* OUT trigger */
     gpioSetMode(GPIO_EXT_TRIGGER_OUT, PI_OUTPUT);
     gpioSetPullUpDown(GPIO_EXT_TRIGGER_OUT, PI_PUD_OFF);
-    gpioWrite(GPIO_EXT_TRIGGER_OUT, 1);
-    usleep(100000);
-    gpioWrite(GPIO_EXT_TRIGGER_OUT, 0);
 
     /* OUT MODE_ADC */
     gpioSetMode(GPIO_EXT_MODE_ADC_OUT, PI_OUTPUT);
