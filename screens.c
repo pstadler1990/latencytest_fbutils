@@ -4,8 +4,12 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <pigpio.h>
+#include <stdbool.h>
 #include "fb_lib.h"
 #include "main.h"
+#include <unistd.h>
+#include "configuration.h"
 
 extern struct FbDevState framebuf_state;
 
@@ -78,6 +82,60 @@ draw_screen_home(struct FbDev* fb_device) {
 
         /* Update buffers */
         fb_update(fb_device);
-        usleep(1000 / 60);
+        usleep(10000 / 60);
     }
+}
+
+void
+draw_screen_test(struct FbDev* fb_device) {
+
+    uint32_t w = fb_device->w;
+    uint32_t h = fb_device->h;
+
+    printf("Test mode\n");
+
+    /* Test screen procedure */
+    bool m_is_processing = true;
+    uint32_t m_done = 0;
+    uint32_t m_timeout = 1000; // TODO: define in configuration!
+
+    gpioWrite(GPIO_EXT_MODE_DIGITAL_OUT, 0);
+
+    sleep(1);
+
+    gpioWrite(GPIO_EXT_MODE_DIGITAL_OUT, 1);
+    while(!gpioRead(GPIO_EXT_TRIGGER_IN)) {
+        printf("..\n");
+        if(--m_timeout == 0) {
+            printf("Failed to set digital mode, exit\n");
+            break;
+        }
+    }
+    printf("...done\n");
+
+    while(m_done < DEFAULT_N_MEASUREMENTS && m_is_processing) {
+
+        // 1. Show black screen
+        fb_clear_screen(fb_device);
+        m_timeout = 1000;
+
+        // 2. Send TRIGGER to STM8
+        gpioWrite(GPIO_EXT_TRIGGER_IN, 1);
+
+        // (2a) STM8 starts time measurement
+        // (2b) STM8 waits for Interrupt
+
+        // 3. Show white screen
+        fb_draw_filled_screen(fb_device, COLOR_WHITE);
+
+        // 4. Wait until MEAS_COMPLETE pin is set by STM8
+        while(!gpioRead(GPIO_EXT_TRIGGER_IN)) {
+            if(--m_timeout == 0) {
+                // TODO: Failed test, stop
+                m_is_processing = false;
+                break;
+            }
+        }
+    }
+
 }

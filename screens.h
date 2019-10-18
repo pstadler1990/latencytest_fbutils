@@ -6,5 +6,5 @@
 #define FB_SCREENS_H
 
 void draw_screen_home(struct FbDev* fb_device);
-
+void draw_screen_test(struct FbDev* fb_device);
 #endif //FB_SCREENS_H
