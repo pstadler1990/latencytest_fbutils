@@ -149,6 +149,11 @@ fb_draw_text(const struct FbDev* fb_device, const char* text, uint32_t x, uint32
 }
 
 void
+fb_draw_filled_screen(const struct FbDev* fb_device, uint32_t color) {
+    memset(fb_device->bbuf, color, fb_device->memlen);
+}
+
+void
 fb_update(struct FbDev* fb_device) {
     /* Copies backbuffer to frontbuffer */
     memcpy(fb_device->fbuf, fb_device->bbuf, fb_device->memlen);
