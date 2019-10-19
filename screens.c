@@ -89,7 +89,6 @@ draw_screen_home(struct FbDev* fb_device) {
 void
 draw_screen_test(struct FbDev* fb_device) {
 
-#define TIMEOUT 100000
     uint32_t w = fb_device->w;
     uint32_t h = fb_device->h;
 
@@ -98,49 +97,53 @@ draw_screen_test(struct FbDev* fb_device) {
     /* Test screen procedure */
     bool m_is_processing = true;
     uint32_t m_done = 0;
-    uint32_t m_timeout = TIMEOUT; // TODO: define in configuration!
+    uint32_t m_timeout = MEASUREMENT_TIMEOUT;
+    uint32_t m_failed = 0;  /* Failed measurements */
 
-    gpioWrite(GPIO_EXT_MODE_DIGITAL_OUT, 0);
-    sleep(1);
-    gpioWrite(GPIO_EXT_MODE_DIGITAL_OUT, 1);
+    /* Wait for trigger reception from STM8 to synchronize the measurements */
+    while(gpioRead(GPIO_EXT_TRIGGER_IN) == 0) {
 
-    // TODO: Receive trigger in from STM8!!
-//    while(!gpioRead(GPIO_EXT_TRIGGER_IN)) {
-//        printf("..\n");
-//        if(--m_timeout == 0) {
-//            printf("Failed to set digital mode, exit\n");
-//            break;
-//        }
-//    }
-//    printf("...done\n");
+        gpioWrite(GPIO_EXT_MODE_DIGITAL_OUT, 0);
+        sleep(100);
+        gpioWrite(GPIO_EXT_MODE_DIGITAL_OUT, 1);
+
+        if(--m_timeout == 0) {
+            printf("Failed to set digital mode, exit\n");
+            return;
+        }
+    }
+    printf("...done\n");
 
     while(m_done < DEFAULT_N_MEASUREMENTS && m_is_processing) {
-
         // 1. Show black screen
         fb_clear_screen(fb_device);
         fb_update(fb_device);
+        usleep(100);
 
         // 2. Send TRIGGER to STM8
+        fb_draw_filled_screen(fb_device, COLOR_WHITE);
+
         gpioWrite(GPIO_EXT_TRIGGER_OUT, 0);
         usleep(100);
         gpioWrite(GPIO_EXT_TRIGGER_OUT, 1);
 
+        //sleep(1);
         //fb_draw_rect(fb_device, 0, 0, w, h, COLOR_WHITE, DRAW_CENTER_NONE);
-        fb_draw_filled_screen(fb_device, COLOR_WHITE);
-
         //usleep(100);   // Sleep is only inserted to test the matching of the STM8's counter
         fb_update(fb_device);
 
         // 4. Wait until MEAS_COMPLETE pin is set by STM8
-        m_timeout = TIMEOUT;
+        m_timeout = MEASUREMENT_TIMEOUT;
         while(gpioRead(GPIO_EXT_TRIGGER_IN) == 0) {
-            printf("wait.\r\n");
-//            if(--m_timeout == 0) {
-//                // TODO: Failed test, stop
-//                m_is_processing = false;
-//                printf("fucked up\r\n");
-//                break;
-//            }
+            if(--m_timeout == 0) {
+                m_failed++;
+                if(m_failed == MAX_FAILED_MEASUREMENTS) {
+                    m_is_processing = false;
+                    printf("Too many failures, quit\r\n");
+                }
+                printf("Measurement %d failed\r\n", m_done);
+                break;
+            }
         }
         printf("single measurement complete\r\n");
         m_done++;
@@ -151,5 +154,5 @@ draw_screen_test(struct FbDev* fb_device) {
     fb_update(fb_device);
 
     // TODO: Show screen text
-    printf("Complete\r\n");
+    printf("Completed with %d failures\r\n", m_failed);
 }
