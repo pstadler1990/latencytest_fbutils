@@ -105,26 +105,27 @@ fb_draw_line(const struct FbDev* fb_device, int32_t xfrom, int32_t yfrom, int32_
 }
 
 void
-fb_draw_rect(const struct FbDev* fb_device, uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color, uint32_t flags) {
+fb_draw_rect(const struct FbDev* fb_device, int32_t x, int32_t y, uint32_t w, uint32_t h, uint32_t color, uint32_t flags) {
     /* Draws a rectangle at x,y with width and height w,h in the specified color.
        You can pass optional flags - otherwise choose DRAW_CENTER_NONE - to center the drawing.
        If you pass any flag or both of DRAW_CENTER_VERTICAL or DRAW_CENTER_HORIZONTAL, x and / or y coordinate are added as offsets */
+    uint32_t xreal = (uint32_t)x, yreal = (uint32_t)y;
     if(flags & DRAW_CENTER_HORIZONTAL) {
-        x = ((fb_device->w / 2) - (w / 2)) + x;
+        xreal = ((fb_device->w / 2) - (w / 2)) + x;
     }
     if(flags & DRAW_CENTER_VERTICAL) {
-        y = ((fb_device->h / 2) - (h / 2)) + y;
+        yreal = ((fb_device->h / 2) - (h / 2)) + y;
     }
 
-    for(uint32_t _x = x; _x < (x + w); _x++) {
-        for(uint32_t _y = y; _y < (y + h); _y++) {
+    for(uint32_t _x = xreal; _x < (xreal + w); _x++) {
+        for(uint32_t _y = yreal; _y < (yreal + h); _y++) {
             _put_pixel(fb_device, _x, _y, color);
         }
     }
 }
 
 void
-fb_draw_text(const struct FbDev* fb_device, const char* text, uint32_t x, uint32_t y, uint32_t color, uint32_t flags) {
+fb_draw_text(const struct FbDev* fb_device, const char* text, int32_t x, int32_t y, uint32_t color, uint32_t flags) {
     /* High-level function to render given text at coordinates x,y with the specified color,
        You can pass optional flags - otherwise choose DRAW_CENTER_NONE - to center the drawing.
        If you pass any flag or both of DRAW_CENTER_VERTICAL or DRAW_CENTER_HORIZONTAL, x and / or y coordinate are added as offsets */
@@ -144,7 +145,7 @@ fb_draw_text(const struct FbDev* fb_device, const char* text, uint32_t x, uint32
             c_offset_real = CHAR_NONE;
         }
         uint32_t char_x = x + (c * (FONT_WIDTH + 2 * FONT_PADDING));
-        _put_char(fb_device, c_offset_real, char_x, y, color);
+        _put_char(fb_device, c_offset_real, char_x, (uint32_t)y, color);
     }
 }
 

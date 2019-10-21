@@ -43,7 +43,7 @@ void fb_close(struct FbDev* fb_device);
 void fb_clear_screen(struct FbDev* fb_device);
 void fb_update(struct FbDev* fb_device);
 void fb_draw_line(const struct FbDev* fb_device, int32_t xfrom, int32_t yfrom, int32_t xto, int32_t yto, uint32_t color);
-void fb_draw_rect(const struct FbDev* fb_device, uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color, uint32_t flags);
-void fb_draw_text(const struct FbDev* fb_device, const char* text, uint32_t x, uint32_t y, uint32_t color, uint32_t flags);
+void fb_draw_rect(const struct FbDev* fb_device, int32_t x, int32_t y, uint32_t w, uint32_t h, uint32_t color, uint32_t flags);
+void fb_draw_text(const struct FbDev* fb_device, const char* text, int32_t x, int32_t y, uint32_t color, uint32_t flags);
 void fb_draw_filled_screen(const struct FbDev* fb_device, uint32_t color);
 #endif //FB_FB_LIB_H
