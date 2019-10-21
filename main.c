@@ -28,15 +28,7 @@ int main() {
 
         framebuf_state.state = FBSTATE_IDLE;
 
-        /* Show home screen until external triggers occur (i.e. start button pressed) */
-        //clock_t time_start = clock();
-
         draw_screen_test(&framebuf_device);
-        // draw_screen_home(&framebuf_device);
-
-        //clock_t time_end = clock();
-        //double diff_in_ms =  ((double) (time_end - time_start) / CLOCKS_PER_SEC) * (double) 1000.0f;
-        //printf("Duration: %f\n", diff_in_ms);
 
         fb_close(&framebuf_device);
     }
