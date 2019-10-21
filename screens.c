@@ -10,6 +10,7 @@
 #include "main.h"
 #include <unistd.h>
 #include "configuration.h"
+#include <time.h>
 
 extern struct FbDevState framebuf_state;
 
@@ -99,14 +100,15 @@ draw_screen_test(struct FbDev* fb_device) {
     uint32_t m_done = 0;
     uint32_t m_timeout = MEASUREMENT_TIMEOUT;
     uint32_t m_failed = 0;  /* Failed measurements */
+    bool m_failed_test = false;
+
+    gpioWrite(GPIO_EXT_MODE_DIGITAL_OUT, 0);
+    usleep(1000);
+    gpioWrite(GPIO_EXT_MODE_DIGITAL_OUT, 1);
 
     /* Wait for trigger reception from STM8 to synchronize the measurements */
     while(gpioRead(GPIO_EXT_TRIGGER_IN) == 0) {
-
-        gpioWrite(GPIO_EXT_MODE_DIGITAL_OUT, 0);
-        sleep(100);
-        gpioWrite(GPIO_EXT_MODE_DIGITAL_OUT, 1);
-
+        printf(".\r\n");
         if(--m_timeout == 0) {
             printf("Failed to set digital mode, exit\n");
             return;
@@ -115,37 +117,37 @@ draw_screen_test(struct FbDev* fb_device) {
     printf("...done\n");
 
     while(m_done < DEFAULT_N_MEASUREMENTS && m_is_processing) {
-        // 1. Show black screen
+        /* Show black screen */
         fb_clear_screen(fb_device);
         fb_update(fb_device);
-        usleep(100);
+        sleep(1);
 
-        // 2. Send TRIGGER to STM8
         fb_draw_filled_screen(fb_device, COLOR_WHITE);
 
+        /*  Send TRIGGER to STM8 */
         gpioWrite(GPIO_EXT_TRIGGER_OUT, 0);
         usleep(100);
         gpioWrite(GPIO_EXT_TRIGGER_OUT, 1);
+        clock_t time_start = clock();
 
-        //sleep(1);
-        //fb_draw_rect(fb_device, 0, 0, w, h, COLOR_WHITE, DRAW_CENTER_NONE);
-        //usleep(100);   // Sleep is only inserted to test the matching of the STM8's counter
         fb_update(fb_device);
 
-        // 4. Wait until MEAS_COMPLETE pin is set by STM8
+        /* Wait until MEAS_COMPLETE pin is set by STM8 */
         m_timeout = MEASUREMENT_TIMEOUT;
         while(gpioRead(GPIO_EXT_TRIGGER_IN) == 0) {
             if(--m_timeout == 0) {
                 m_failed++;
                 if(m_failed == MAX_FAILED_MEASUREMENTS) {
                     m_is_processing = false;
-                    printf("Too many failures, quit\r\n");
+                    m_failed_test = true;
                 }
-                printf("Measurement %d failed\r\n", m_done);
                 break;
             }
         }
-        printf("single measurement complete\r\n");
+        clock_t time_end = clock();
+        double diff_in_ms =  ((double) (time_end - time_start) / CLOCKS_PER_SEC) * (double) 1000.0f;
+        printf("Duration: %f\n", diff_in_ms);
+
         m_done++;
     }
 
@@ -153,6 +155,32 @@ draw_screen_test(struct FbDev* fb_device) {
     fb_clear_screen(fb_device);
     fb_update(fb_device);
 
-    // TODO: Show screen text
-    printf("Completed with %d failures\r\n", m_failed);
+    while(framebuf_state.state == FBSTATE_IDLE) {
+
+        if(!m_failed_test) {
+            fb_draw_rect(fb_device, 0, 0, w / 2, h / 2, COLOR_WHITE, DRAW_CENTER_HORIZONTAL);
+
+            fb_draw_rect(fb_device, 0, 0, w / 2, 100, COLOR_GREEN, DRAW_CENTER_HORIZONTAL);
+            char m_complete_info[100];
+            sprintf(m_complete_info, "Measurement valid (%d/%d failed)", m_failed, DEFAULT_N_MEASUREMENTS);
+
+            fb_draw_text(fb_device, m_complete_info, 0, 40, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+
+            /* Show results from UART */
+            // TODO:
+
+        } else {
+            fb_draw_rect(fb_device, 0, 0, w / 2, 200, COLOR_WHITE, DRAW_CENTER_HORIZONTAL);
+            fb_draw_text(fb_device, "- Press START to retry -", 0, 145, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+
+            fb_draw_rect(fb_device, 0, 0, w / 2, 100, COLOR_RED, DRAW_CENTER_HORIZONTAL);
+            fb_draw_text(fb_device, "Measurement invalid - too many failures", 0, 40, COLOR_WHITE, DRAW_CENTER_HORIZONTAL);
+
+            // TODO: Show text "Press START to retry measurements"
+        }
+
+        /* Update buffers */
+        fb_update(fb_device);
+        usleep(10000 / 60);
+    }
 }
