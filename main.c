@@ -5,13 +5,17 @@
 #include "configuration.h"
 #include "pinsetup.h"
 #include <time.h>
+#include "communication.h"
+#include <unistd.h>
 
 struct FbDevState framebuf_state = {
         .state = FBSTATE_INITIALIZE,
         .n_measurements = DEFAULT_N_MEASUREMENTS,
 };
+int uart0_filestream = -1;
 
-int main() {
+int
+main() {
     struct FbDev framebuf_device;
 
     if(!fb_init("/dev/fb0", &framebuf_device)) {
@@ -25,11 +29,16 @@ int main() {
             perror("Could not open GPIOs, exit");
         }
 #endif
+        /* Initialize communication */
+        if(!init_uart("/dev/ttyS0")) {
+            perror("Could not initialize UART, exit");
+        }
 
+        /* Show screens */
         framebuf_state.state = FBSTATE_IDLE;
-
         draw_screen_test(&framebuf_device);
 
+        close(uart0_filestream);
         fb_close(&framebuf_device);
     }
 
