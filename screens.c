@@ -11,6 +11,8 @@
 #include <unistd.h>
 #include "configuration.h"
 #include <time.h>
+#include <memory.h>
+#include "communication.h"
 
 extern struct FbDevState framebuf_state;
 
@@ -92,8 +94,9 @@ draw_screen_test(struct FbDev* fb_device) {
 
     uint32_t w = fb_device->w;
     uint32_t h = fb_device->h;
-
-    printf("Test mode\n");
+    uint8_t buf[2];
+    char receiveBuf[DEFAULT_N_MEASUREMENTS + 1];
+    int receiveStatus = -1;
 
     /* Test screen procedure */
     bool m_is_processing = true;
@@ -102,17 +105,25 @@ draw_screen_test(struct FbDev* fb_device) {
     uint32_t m_failed = 0;  /* Failed measurements */
     bool m_failed_test = false;
 
-    gpioWrite(GPIO_EXT_MODE_DIGITAL_OUT, 0);
-    usleep(1000);
-    gpioWrite(GPIO_EXT_MODE_DIGITAL_OUT, 1);
+    buf[0] = 'D';
+    buf[1] = '\n';
 
     /* Wait for trigger reception from STM8 to synchronize the measurements */
-    while(gpioRead(GPIO_EXT_TRIGGER_IN) == 0) {
+    while(receiveStatus == -1) {
         printf(".\r\n");
+        uart_send(buf, 2);
+
+        receiveStatus = uart_receive(receiveBuf, DEFAULT_N_MEASUREMENTS + 1);
+        if(receiveStatus) {
+            if(strncmp("OK", receiveBuf, 2) == 0) {
+                break;
+            }
+        }
         if(--m_timeout == 0) {
             printf("Failed to set digital mode, exit\n");
             return;
         }
+        sleep(1);
     }
     printf("...done\n");
 
@@ -144,16 +155,36 @@ draw_screen_test(struct FbDev* fb_device) {
                 break;
             }
         }
-        clock_t time_end = clock();
-        double diff_in_ms =  ((double) (time_end - time_start) / CLOCKS_PER_SEC) * (double) 1000.0f;
-        printf("Duration: %f\n", diff_in_ms);
-
         m_done++;
     }
 
     /* Completed measurements */
     fb_clear_screen(fb_device);
     fb_update(fb_device);
+
+    memset(receiveBuf, 0, sizeof(uint8_t) * (DEFAULT_N_MEASUREMENTS + 1));
+
+    /* Get measurements from slave device */
+    buf[0] = 'M';     // 'M' indicates Measurements request
+    buf[1] = '\n';
+
+    uart_send(buf, 2);
+
+    receiveStatus = -1;
+    m_timeout = MEASUREMENT_TIMEOUT;
+    while(1) {
+        usleep(100);
+        receiveStatus = uart_receive((uint8_t *) &receiveBuf, DEFAULT_N_MEASUREMENTS + 1);
+        if(receiveStatus != -1) {
+            printf("%s\r\n", receiveBuf);
+        }
+//        if(--m_timeout == 0) {
+//            printf("Failed to read measurements\n");
+//            return;
+//        }
+        sleep(1);
+    };
+    printf("received measurement data\n");
 
     while(framebuf_state.state == FBSTATE_IDLE) {
 
@@ -167,7 +198,12 @@ draw_screen_test(struct FbDev* fb_device) {
             fb_draw_text(fb_device, m_complete_info, 0, 40, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
 
             /* Show results from UART */
-            // TODO:
+            for(uint32_t i=0; i < DEFAULT_N_MEASUREMENTS + 1; i++) {
+                char str_data[50];
+                sprintf(str_data, "(%d): %d", i, receiveBuf[i]);
+
+                fb_draw_text(fb_device, str_data, 0, 60 + (i * 20), COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+            }
 
         } else {
             fb_draw_rect(fb_device, 0, 0, w / 2, 200, COLOR_WHITE, DRAW_CENTER_HORIZONTAL);
