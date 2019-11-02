@@ -141,19 +141,23 @@ draw_screen_test(struct FbDev* fb_device) {
         gpioWrite(GPIO_EXT_TRIGGER_OUT, 1);
         clock_t time_start = clock();
 
+	//usleep(100);
         fb_update(fb_device);
 
         /* Wait until MEAS_COMPLETE pin is set by STM8 */
         m_timeout = MEASUREMENT_TIMEOUT;
         while(gpioRead(GPIO_EXT_TRIGGER_IN) == 0) {
-            if(--m_timeout == 0) {
+           if(--m_timeout == 0) {
                 m_failed++;
+	        printf("failed single measurement\n");
                 if(m_failed == MAX_FAILED_MEASUREMENTS) {
+                    printf("Failed measurement\n");
                     m_is_processing = false;
                     m_failed_test = true;
                 }
                 break;
-            }
+           }
+           //printf("*\n");
         }
         m_done++;
     }
@@ -171,12 +175,16 @@ draw_screen_test(struct FbDev* fb_device) {
     uart_send(buf, 2);
 
     receiveStatus = -1;
+    uint32_t receivePtr = 0;
     m_timeout = MEASUREMENT_TIMEOUT;
     while(1) {
         usleep(100);
         receiveStatus = uart_receive((uint8_t *) &receiveBuf, DEFAULT_N_MEASUREMENTS + 1);
         if(receiveStatus != -1) {
-            printf("%s\r\n", receiveBuf);
+            printf("Received: [ %s ]\n", receiveBuf);
+	    receivePtr++;
+        } else {
+	    break;
         }
 //        if(--m_timeout == 0) {
 //            printf("Failed to read measurements\n");
@@ -185,6 +193,11 @@ draw_screen_test(struct FbDev* fb_device) {
         sleep(1);
     };
     printf("received measurement data\n");
+
+    for(uint32_t i=0; i<10; i++) {
+	printf("Receive: %d %c %lu\n", receiveBuf[i], receiveBuf[i], receiveBuf[i]);
+    }
+    return;
 
     while(framebuf_state.state == FBSTATE_IDLE) {
 
