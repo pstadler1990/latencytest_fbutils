@@ -7,9 +7,10 @@
 #include "pigpio.h"
 #include "configuration.h"
 #include <unistd.h>
+#include <stdlib.h>
+#include "menu.h"
 
-static void _trigger_in_isr(int gpio, int level, uint32_t tick);
-
+static void _rot_switch_isr(int gpio, int level, uint32_t tick);
 
 int8_t
 init_GPIOs(void) {
@@ -20,7 +21,6 @@ init_GPIOs(void) {
 
     /* Configure pins for exchange with external uC (STM8) */
     gpioSetMode(GPIO_EXT_TRIGGER_IN, PI_INPUT);
-    // gpioSetISRFunc(GPIO_EXT_TRIGGER_IN, FALLING_EDGE, -1, _trigger_in_isr);
 
     /* OUT trigger */
     gpioSetMode(GPIO_EXT_TRIGGER_OUT, PI_OUTPUT);
@@ -34,12 +34,25 @@ init_GPIOs(void) {
     gpioSetMode(GPIO_EXT_MODE_DIGITAL_OUT, PI_OUTPUT);
     gpioSetPullUpDown(GPIO_EXT_MODE_DIGITAL_OUT, PI_PUD_UP);
 
-    // TODO: Add USART for intercommunication with external uC (for measurement values for calibration)
+    /* Rotary encoder A, IN digital */
+    gpioSetMode(GPIO_INT_ROT_A, PI_INPUT);
+    gpioSetPullUpDown(GPIO_INT_ROT_A, PI_PUD_UP);
+
+    /* Rotary encoder B, IN digital */
+    gpioSetMode(GPIO_INT_ROT_B, PI_INPUT);
+    gpioSetPullUpDown(GPIO_INT_ROT_B, PI_PUD_UP);
+
+    /* Rotary encoder switch, IN digital */
+    gpioSetMode(GPIO_INT_ROT_SW, PI_INPUT);
+    gpioSetISRFunc(GPIO_INT_ROT_SW, RISING_EDGE, -1, _rot_switch_isr);
+
     return 1;
 }
 
 void
-_trigger_in_isr(int gpio, int level, uint32_t tick) {
-    /* Interrupt service routine ISR for trigger IN */
-    printf("Interrupt occured on GPIO %d, level: %d, tick: %d\n", gpio, level, tick);
+_rot_switch_isr(int gpio, int level, uint32_t tick) {
+    /* Interrupt service routine ISR for rotary encoder switch */
+    if(gpioRead(GPIO_INT_ROT_SW)) {
+        menu_switch_pressed();
+    }
 }
