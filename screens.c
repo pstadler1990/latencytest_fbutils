@@ -13,6 +13,7 @@
 #include <time.h>
 #include <memory.h>
 #include "communication.h"
+#include "menu.h"
 
 extern struct FbDevState framebuf_state;
 
@@ -82,6 +83,8 @@ draw_screen_home(struct FbDev* fb_device) {
         if(bb_color_index > 4) {
             bb_color_index = 0;
         }
+
+        menu_draw(fb_device);
 
         /* Update buffers */
         fb_update(fb_device);
