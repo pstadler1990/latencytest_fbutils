@@ -50,7 +50,7 @@ uart_receive(char* buf, size_t len) {
     } else if(receivedBytes > 0) {
         /* Receive buffer not empty */
         buf[receivedBytes] = 0;
-        return receivedBytes;
+        return (int) receivedBytes;
     }
     return -1;
 }
