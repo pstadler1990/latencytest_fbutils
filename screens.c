@@ -22,6 +22,9 @@ draw_screen_home(struct FbDev* fb_device) {
     uint32_t w = fb_device->w;
     uint32_t h = fb_device->h;
 
+    struct timespec refresh_time_start;
+    struct timespec refresh_time_end;
+
     /* Bouncing rect */
     uint8_t bb_color_index = 0;
     const uint32_t bb_colors[5] = {
@@ -47,48 +50,56 @@ draw_screen_home(struct FbDev* fb_device) {
        - START button fires next state: FBSTATE_TRIGGERED
        - Rotary encoder (navigation) changes settings */
     while(framebuf_state.state == FBSTATE_IDLE) {
-        /* Bouncing rect */
-        fb_draw_rect(fb_device, xx, yy, 100, 100, bb_colors[bb_color_index], DRAW_CENTER_NONE);
 
-        fb_draw_line(fb_device, 0, 0, w, h, COLOR_WHITE);
-        fb_draw_line(fb_device, w, 0, 0, h, COLOR_WHITE);
-        fb_draw_rect(fb_device, 0, 0, w / 2, h / 2, COLOR_WHITE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+        clock_gettime(CLOCK_MONOTONIC_RAW, &refresh_time_start);
+        __time_t delta_us = (refresh_time_end.tv_sec - refresh_time_start.tv_sec) * 1000000 + (refresh_time_end.tv_nsec - refresh_time_start.tv_nsec) / 1000;
 
-        fb_draw_rect(fb_device, 0, 0, 30, 30, COLOR_RED, DRAW_CENTER_NONE);
-        fb_draw_rect(fb_device, w - 30, 0, 30, 30, COLOR_GREEN, DRAW_CENTER_NONE);
-        fb_draw_rect(fb_device, 0, h - 30, 30, 30, COLOR_BLUE, DRAW_CENTER_NONE);
-        fb_draw_rect(fb_device, w - 30, h - 30, 30, 30, COLOR_YELLOW, DRAW_CENTER_NONE);
+        if(delta_us > (1000000 / 60)) {
+            /* Bouncing rect */
+            fb_draw_rect(fb_device, xx, yy, 100, 100, bb_colors[bb_color_index], DRAW_CENTER_NONE);
 
-        /* Texts */
-        fb_draw_text(fb_device, display_info_str, 0, (h / 4) - 80, COLOR_BLACK, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
-        fb_draw_text(fb_device, bpp_info_str, 0, ((h / 4) - 60), COLOR_BLACK, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+            fb_draw_line(fb_device, 0, 0, w, h, COLOR_WHITE);
+            fb_draw_line(fb_device, w, 0, 0, h, COLOR_WHITE);
+            fb_draw_rect(fb_device, 0, 0, w / 2, h / 2, COLOR_WHITE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
 
-        if(framebuf_state.state == FBSTATE_IDLE) {
-            fb_draw_text(fb_device, "- Waiting for device. Place device on display -", 0, (h / 4) - 20, COLOR_RED, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
-        } else if(framebuf_state.state == FBSTATE_READY_FOR_MEASUREMENTS) {
-            fb_draw_text(fb_device, "- Ready! Press START to begin measurements -", 0, (h / 4) - 20, COLOR_BLUE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+            fb_draw_rect(fb_device, 0, 0, 30, 30, COLOR_RED, DRAW_CENTER_NONE);
+            fb_draw_rect(fb_device, w - 30, 0, 30, 30, COLOR_GREEN, DRAW_CENTER_NONE);
+            fb_draw_rect(fb_device, 0, h - 30, 30, 30, COLOR_BLUE, DRAW_CENTER_NONE);
+            fb_draw_rect(fb_device, w - 30, h - 30, 30, 30, COLOR_YELLOW, DRAW_CENTER_NONE);
+
+            /* Texts */
+            fb_draw_text(fb_device, display_info_str, 0, (h / 4) - 80, COLOR_BLACK,
+                         DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+            fb_draw_text(fb_device, bpp_info_str, 0, ((h / 4) - 60), COLOR_BLACK,
+                         DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+
+            if (framebuf_state.state == FBSTATE_IDLE) {
+                fb_draw_text(fb_device, "- Waiting for device. Place device on display -", 0, (h / 4) - 20, COLOR_RED,
+                             DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+            } else if (framebuf_state.state == FBSTATE_READY_FOR_MEASUREMENTS) {
+                fb_draw_text(fb_device, "- Ready! Press START to begin measurements -", 0, (h / 4) - 20, COLOR_BLUE,
+                             DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+            }
+
+            /* Bouncing rect animation */
+            yy += ys;
+            xx += xs;
+            if ((xx + 100 == w) || (xx == 0)) {
+                xs = -xs;
+                bb_color_index += 1;
+            }
+            if ((yy + 100 == h) || (yy == 0)) {
+                ys = -ys;
+                bb_color_index += 1;
+            }
+            if (bb_color_index > 4) {
+                bb_color_index = 0;
+            }
+
+            /* Update buffers */
+            fb_update(fb_device);
         }
-
-        /* Bouncing rect animation */
-        yy += ys;
-        xx += xs;
-        if((xx + 100 == w) || (xx == 0)) {
-            xs = -xs;
-            bb_color_index += 1;
-        }
-        if((yy + 100 == h) || (yy == 0)) {
-            ys = -ys;
-            bb_color_index += 1;
-        }
-        if(bb_color_index > 4) {
-            bb_color_index = 0;
-        }
-
-        menu_draw(fb_device);
-
-        /* Update buffers */
-        fb_update(fb_device);
-        usleep(10000 / 60);
+        clock_gettime(CLOCK_MONOTONIC_RAW, &refresh_time_end);
     }
 }
 
@@ -182,7 +193,7 @@ draw_screen_test(struct FbDev* fb_device) {
     m_timeout = MEASUREMENT_TIMEOUT;
     while(1) {
         usleep(100);
-        receiveStatus = uart_receive((uint8_t *) &receiveBuf, DEFAULT_N_MEASUREMENTS + 1);
+        receiveStatus = uart_receive((char *)&receiveBuf, DEFAULT_N_MEASUREMENTS + 1);
         if(receiveStatus != -1) {
             printf("Received: [ %s ]\n", receiveBuf);
 	    receivePtr++;
@@ -234,5 +245,54 @@ draw_screen_test(struct FbDev* fb_device) {
         /* Update buffers */
         fb_update(fb_device);
         usleep(10000 / 60);
+    }
+}
+
+void
+draw_screen_calib_bw_digits(struct FbDev* fb_device) {
+    /* Black and white digits calibration screen */
+    bool m_is_processing = true;
+    bool m_failed_test = false;
+
+    /* Test screen procedure */
+    if(!uart_send_command(CTRL_CMD_CALIB_MODE)) {
+        /* Failed to set STM8 in calibration mode, exit */
+        return;
+    }
+    printf("** OK **\n");
+
+    char receiveBuf[10];
+
+    /* STM8 is in calibration mode */
+    while(1) {
+        /* Show black screen */
+        fb_clear_screen(fb_device);
+        fb_update(fb_device);
+        sleep(2);
+
+        if(!uart_send_command(CTRL_CMD_CALIB_BLACK)) {
+            /* Failed to set black screen mode, exit */
+            m_failed_test = true;
+	    printf("** FAILED BLACK SCREEN TEST!\n");
+            break;
+        }
+
+        sleep(5);
+        /* Show white screen */
+        fb_draw_filled_screen(fb_device, COLOR_WHITE);
+        fb_update(fb_device);
+        sleep(2);
+
+        if(!uart_send_command(CTRL_CMD_CALIB_WHITE)) {
+            /* Failed to set black screen mode, exit */
+            m_failed_test = true;
+	    printf("** FAILED WHITE SCREEN TEST!\n");
+            break;
+        }
+	break;
+    }
+
+    if(!m_failed_test) {
+        printf("** SUCCESSFULLY CALIBRATED DEVICE! ** \n"); // TODO: Replace with fblib text!
     }
 }
