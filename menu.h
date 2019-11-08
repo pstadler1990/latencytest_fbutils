@@ -17,6 +17,7 @@ typedef enum {
 } ROT_STATE;
 
 void menu_switch_pressed(void);
+void menu_poll(void);
 void menu_draw(struct FbDev* fb_device);
 
 #endif //FB_MENU_H

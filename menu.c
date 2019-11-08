@@ -13,7 +13,6 @@ static int last_state_a = 0;
 static unsigned int last_poll_time = 0;
 
 static void menu_rot_changed(ROT_STATE state);
-static void menu_poll(void);
 
 void
 menu_switch_pressed(void) {
@@ -24,21 +23,10 @@ menu_switch_pressed(void) {
 void
 menu_draw(struct FbDev* fb_device) {
     (void) fb_device;
-
-    menu_poll();
+    // TODO:
 }
 
-static void
-menu_rot_changed(ROT_STATE state) {
-    /* */
-    if(state == ROTSTATE_CLOCKWISE) {
-        printf("clockwise\n");
-    } else {
-        printf("counter clockwise\n");
-    }
-}
-
-static void
+void
 menu_poll(void) {
     if(last_poll_time > 0) {
         last_poll_time--;
@@ -57,5 +45,16 @@ menu_poll(void) {
 
         last_state_a = a_state;
         last_poll_time = ROT_DEBOUNCE_TIME;
+    }
+}
+
+
+static void
+menu_rot_changed(ROT_STATE state) {
+    /* */
+    if(state == ROTSTATE_CLOCKWISE) {
+        printf("clockwise\n");
+    } else {
+        printf("counter clockwise\n");
     }
 }
