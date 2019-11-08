@@ -89,22 +89,25 @@ uart_send_command(UART_CTRL_COMMAND command) {
 }
 
 uint8_t
-uart_receive_response(char* receiveBuf, const uint32_t responseLen) {
+uart_receive_response(const uint32_t responseLen, const char* response) {
     /* */
     int32_t receiveStatus = -1;
     uint32_t m_timeout = MEASUREMENT_TIMEOUT;
 
-    while(receiveStatus == -1) {
-        printf(".\r\n");
+    while(1) {
+        char receiveBuf[responseLen];
 
-        receiveStatus = uart_receive(receiveBuf, responseLen);
+        receiveStatus = uart_receive(receiveBuf, responseLen); 
         if(receiveStatus) {
-            return 1;
+            if(strncmp(response, receiveBuf, responseLen) == 0) {
+                return 1;
+            }
         }
 
         if(--m_timeout == 0) {
             break;
         }
+        sleep(1);
     }
     return 0;
 }

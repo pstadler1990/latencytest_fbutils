@@ -22,5 +22,5 @@ uint8_t init_uart(const char* uartIdentifier);
 uint8_t uart_send(const uint8_t* buf, size_t len);
 int uart_receive(char* buf, size_t len);
 uint8_t uart_send_command(UART_CTRL_COMMAND command);
-uint8_t uart_receive_response(char* receiveBuf, uint32_t responseLen);
+uint8_t uart_receive_response(const uint32_t responseLen, const char* response);
 #endif //FB_COMMUNICATION_H
