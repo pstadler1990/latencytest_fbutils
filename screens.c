@@ -251,15 +251,10 @@ draw_screen_test(struct FbDev* fb_device) {
 void
 draw_screen_calib_bw_digits(struct FbDev* fb_device) {
     /* Black and white digits calibration screen */
-    bool m_is_processing = true;
-    bool m_failed_test = false;
-
-    /* Test screen procedure */
     if(!uart_send_command(CTRL_CMD_CALIB_MODE)) {
         /* Failed to set STM8 in calibration mode, exit */
         return;
     }
-    printf("** OK **\n");
 
     char receiveBuf[10];
 
@@ -268,31 +263,53 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
         /* Show black screen */
         fb_clear_screen(fb_device);
         fb_update(fb_device);
-        sleep(2);
+        sleep(1);
 
         if(!uart_send_command(CTRL_CMD_CALIB_BLACK)) {
             /* Failed to set black screen mode, exit */
-            m_failed_test = true;
-	    printf("** FAILED BLACK SCREEN TEST!\n");
-            break;
+	        printf("** FAILED BLACK SCREEN TEST!\n");
+            return;
         }
 
         sleep(5);
+
+        /* Show white screen */
+        fb_draw_filled_screen(fb_device, COLOR_WHITE);
+        fb_update(fb_device);
+        sleep(1);
+
+        if(!uart_send_command(CTRL_CMD_CALIB_WHITE)) {
+            /* Failed to set black screen mode, exit */
+	        printf("** FAILED WHITE SCREEN TEST!\n");
+            return;
+        }
+
+        if(uart_receive_response(8, "CALIB OK")) {
+            /* Calibration okay */
+            printf("** SUCCESSFULLY CALIBRATED DEVICE! ** \n"); // TODO: Replace with fblib text!
+        } else {
+	    printf("--- FAILED ---\n");
+	}
+        break;
+    }
+
+    fb_clear_screen(fb_device);
+    fb_update(fb_device);
+    sleep(1);
+}
+
+void
+draw_screen_alternating(struct FbDev* fb_device) {
+    /* Black and white alternating screen without timeouts */
+    while(1) {
+        /* Show black screen */
+        fb_clear_screen(fb_device);
+        fb_update(fb_device);
+        sleep(2);
+
         /* Show white screen */
         fb_draw_filled_screen(fb_device, COLOR_WHITE);
         fb_update(fb_device);
         sleep(2);
-
-        if(!uart_send_command(CTRL_CMD_CALIB_WHITE)) {
-            /* Failed to set black screen mode, exit */
-            m_failed_test = true;
-	    printf("** FAILED WHITE SCREEN TEST!\n");
-            break;
-        }
-	break;
-    }
-
-    if(!m_failed_test) {
-        printf("** SUCCESSFULLY CALIBRATED DEVICE! ** \n"); // TODO: Replace with fblib text!
     }
 }
