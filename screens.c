@@ -283,13 +283,12 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
 	        printf("** FAILED WHITE SCREEN TEST!\n");
             return;
         }
-
         if(uart_receive_response(8, "CALIB OK")) {
-            /* Calibration okay */
-            printf("** SUCCESSFULLY CALIBRATED DEVICE! ** \n"); // TODO: Replace with fblib text!
+            printf("** CALIB OK -> TRUE **\n");
         } else {
-	    printf("--- FAILED ---\n");
-	}
+            printf("## ERROR CALIB ##\n");
+        }
+
         break;
     }
 

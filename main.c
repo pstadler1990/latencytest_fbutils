@@ -37,8 +37,9 @@ main() {
 
         /* Show screens */
         framebuf_state.state = FBSTATE_IDLE;
-        //draw_screen_test(&framebuf_device);
+
         draw_screen_calib_bw_digits(&framebuf_device);
+        //draw_screen_alternating(&framebuf_device);
 
         close(uart0_filestream);
         fb_close(&framebuf_device);
