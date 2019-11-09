@@ -26,7 +26,7 @@ init_uart(const char* uartIdentifier) {
     options.c_cflag = B9600 | CS8 | CLOCAL | CREAD;
     options.c_iflag = IGNPAR;
     options.c_oflag = 0;
-    options.c_lflag = 0;
+    options.c_lflag |= ICANON;
     tcflush(uart0_filestream, TCIFLUSH);
     tcsetattr(uart0_filestream, TCSANOW, &options);
 
@@ -51,7 +51,7 @@ uart_receive(char* buf, size_t len) {
         return -1;
     } else if(receivedBytes > 0) {
         /* Receive buffer not empty */
-        buf[receivedBytes] = 0;
+        buf[receivedBytes] = '\0';
         return (int) receivedBytes;
     }
     return -1;
@@ -95,10 +95,10 @@ uart_receive_response(const uint32_t responseLen, const char* response) {
     uint32_t m_timeout = MEASUREMENT_TIMEOUT;
 
     while(1) {
-        char receiveBuf[responseLen];
+        char receiveBuf[responseLen + 2];
 
         receiveStatus = uart_receive(receiveBuf, responseLen); 
-        if(receiveStatus) {
+        if(receiveStatus > 0) {
             if(strncmp(response, receiveBuf, responseLen) == 0) {
                 return 1;
             }
@@ -107,7 +107,6 @@ uart_receive_response(const uint32_t responseLen, const char* response) {
         if(--m_timeout == 0) {
             break;
         }
-        sleep(1);
     }
     return 0;
 }

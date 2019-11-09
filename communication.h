@@ -15,7 +15,6 @@ typedef enum{
     CTRL_CMD_GET_MEASURES = 'M',
     CTRL_CMD_CALIB_BLACK = 'B',
     CTRL_CMD_CALIB_WHITE = 'W',
-
 } UART_CTRL_COMMAND;
 
 uint8_t init_uart(const char* uartIdentifier);
