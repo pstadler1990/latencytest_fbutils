@@ -58,7 +58,7 @@ uart_receive(char* buf, size_t len) {
 }
 
 uint8_t
-uart_send_command(UART_CTRL_COMMAND command) {
+uart_send_command(UART_CTRL_COMMAND command, bool timed) {
     uint8_t buf[2] = {
         command,
         '\n'
@@ -79,7 +79,7 @@ uart_send_command(UART_CTRL_COMMAND command) {
                 return 1;
             }
         }
-        if(--m_timeout == 0) {
+        if(timed && --m_timeout == 0) {
             printf("Failed to send command, exit\n");
             break;
         }
@@ -89,7 +89,7 @@ uart_send_command(UART_CTRL_COMMAND command) {
 }
 
 uint8_t
-uart_receive_response(const uint32_t responseLen, const char* response) {
+uart_receive_response(const uint32_t responseLen, const char* response, bool timed) {
     /* */
     int32_t receiveStatus = -1;
     uint32_t m_timeout = MEASUREMENT_TIMEOUT;
@@ -104,7 +104,7 @@ uart_receive_response(const uint32_t responseLen, const char* response) {
             }
         }
 
-        if(--m_timeout == 0) {
+        if(timed && --m_timeout == 0) {
             break;
         }
     }
