@@ -8,12 +8,11 @@
 #include <stdbool.h>
 #include "fb_lib.h"
 #include "main.h"
-#include <unistd.h>
 #include "configuration.h"
-#include <time.h>
 #include <memory.h>
+#include <errno.h>
+#include <stdlib.h>
 #include "communication.h"
-#include "menu.h"
 
 extern struct FbDevState framebuf_state;
 
@@ -106,48 +105,34 @@ draw_screen_home(struct FbDev* fb_device) {
 void
 draw_screen_test(struct FbDev* fb_device) {
 
+#define BUF_SIZE ((uint32_t)100)
+
     uint32_t w = fb_device->w;
     uint32_t h = fb_device->h;
-    uint8_t buf[2];
-    char receiveBuf[DEFAULT_N_MEASUREMENTS + 1];
-    int receiveStatus = -1;
+    char receiveBuf[BUF_SIZE];
 
     /* Test screen procedure */
-    bool m_is_processing = true;
     uint32_t m_done = 0;
-    uint32_t m_timeout = MEASUREMENT_TIMEOUT;
     uint32_t m_failed = 0;  /* Failed measurements */
     bool m_failed_test = false;
 
-    buf[0] = 'D';
-    buf[1] = '\n';
-
     /* Wait for trigger reception from STM8 to synchronize the measurements */
-    while(receiveStatus == -1) {
-        printf(".\r\n");
-        uart_send(buf, 2);
-
-        receiveStatus = uart_receive(receiveBuf, DEFAULT_N_MEASUREMENTS + 1);
-        if(receiveStatus) {
-            if(strncmp("OK", receiveBuf, 2) == 0) {
-                break;
-            }
-        }
-        if(--m_timeout == 0) {
-            printf("Failed to set digital mode, exit\n");
-            return;
-        }
-        sleep(1);
+    if(!uart_send_command(CTRL_CMD_TEST_MODE, false)) {
+        printf("Failed to set test mode, exit!\n");
+        return;
     }
-    printf("...done\n");
 
-    while(m_done < DEFAULT_N_MEASUREMENTS && m_is_processing) {
+    /* STM8 is in test mode */
+
+    while(m_done < DEFAULT_N_MEASUREMENTS) {
+	printf("Measurement %d\n", m_done);
         /* Show black screen */
         fb_clear_screen(fb_device);
         fb_update(fb_device);
         sleep(1);
 
         fb_draw_filled_screen(fb_device, COLOR_WHITE);
+	//fb_update(fb_device);
 
         /*  Send TRIGGER to STM8 */
         gpioWrite(GPIO_EXT_TRIGGER_OUT, 0);
@@ -159,19 +144,11 @@ draw_screen_test(struct FbDev* fb_device) {
         fb_update(fb_device);
 
         /* Wait until MEAS_COMPLETE pin is set by STM8 */
-        m_timeout = MEASUREMENT_TIMEOUT;
-        while(gpioRead(GPIO_EXT_TRIGGER_IN) == 0) {
-           if(--m_timeout == 0) {
-                m_failed++;
-	        printf("failed single measurement\n");
-                if(m_failed == MAX_FAILED_MEASUREMENTS) {
-                    printf("Failed measurement\n");
-                    m_is_processing = false;
-                    m_failed_test = true;
-                }
+        if(!uart_receive_response(7, "MEAS OK", false)) {
+            if(++m_failed >= MAX_FAILED_MEASUREMENTS) {
+                m_failed_test = true;
                 break;
-           }
-           //printf("*\n");
+            }
         }
         m_done++;
     }
@@ -180,36 +157,71 @@ draw_screen_test(struct FbDev* fb_device) {
     fb_clear_screen(fb_device);
     fb_update(fb_device);
 
+    printf("**** MEASURE DONE ****\n");
+
     memset(receiveBuf, 0, sizeof(uint8_t) * (DEFAULT_N_MEASUREMENTS + 1));
 
     /* Get measurements from slave device */
-    buf[0] = 'M';     // 'M' indicates Measurements request
-    buf[1] = '\n';
+    if(!uart_send_command(CTRL_CMD_GET_MEASURES, false)) {
+        printf("Failed to set measurement command, exit!\n");
+        return;
+    }
+    printf("*** RECEIVING ***\n");
 
-    uart_send(buf, 2);
+    struct Measurement measurements[DEFAULT_N_MEASUREMENTS];
 
-    receiveStatus = -1;
+    bool is_receiving = true;
+    int receiveStatus = -1;
     uint32_t receivePtr = 0;
-    m_timeout = MEASUREMENT_TIMEOUT;
-    while(1) {
-        usleep(100);
-        receiveStatus = uart_receive((char *)&receiveBuf, DEFAULT_N_MEASUREMENTS + 1);
-        if(receiveStatus != -1) {
-            printf("Received: [ %s ]\n", receiveBuf);
-	    receivePtr++;
-        } else {
-	    break;
+    bool has_package = false;
+    uint32_t measurementTmpBuf[3];
+    uint32_t m_index = 0;
+    uint32_t lastReceivedTimeout = MEASUREMENT_TIMEOUT;
+
+    while(is_receiving) {
+
+        if((receivePtr + 1 > DEFAULT_N_MEASUREMENTS) || --lastReceivedTimeout == 0) {
+            is_receiving = false;
         }
-//        if(--m_timeout == 0) {
-//            printf("Failed to read measurements\n");
-//            return;
-//        }
-        sleep(1);
+
+        receiveStatus = uart_receive(receiveBuf, BUF_SIZE);
+
+        if(receiveStatus != -1) {
+
+            lastReceivedTimeout = MEASUREMENT_TIMEOUT;
+
+            if(strncmp("{", receiveBuf, 1) == 0) {
+                /* Begin of new measurement package */
+                has_package = true;
+            } else if(strncmp("}", receiveBuf, 1) == 0) {
+                /* End of measurement package */
+                receivePtr++;
+                has_package = false;
+            } else {
+                /* Should be measurement data */
+                if(has_package && m_index < 3) {
+                    uint32_t num = (uint32_t) strtoll(receiveBuf, NULL, 10);
+                    measurementTmpBuf[m_index] = num;
+                    if(m_index + 1 < 3) {
+                        m_index++;
+                    } else {
+                        /* Received three values */
+                        measurements[receivePtr].tTrigger = measurementTmpBuf[0];
+                        measurements[receivePtr].tBlack = measurementTmpBuf[1];
+                        measurements[receivePtr].tWhite = measurementTmpBuf[2];
+                        m_index = 0;
+		            }
+                }
+            }
+        }
     };
     printf("received measurement data\n");
 
-    for(uint32_t i=0; i<10; i++) {
-	printf("Receive: %d %c %lu\n", receiveBuf[i], receiveBuf[i], receiveBuf[i]);
+    for(uint32_t i = 0; i < DEFAULT_N_MEASUREMENTS; i++) {
+	    //printf("Receive (%d) -> %d %d %d\n", i, measurements[i].tTrigger, measurements[i].tBlack, measurements[i].tWhite);
+	    uint32_t tGesamt = measurements[i].tWhite - measurements[i].tTrigger;
+	    uint32_t tUmschalt = measurements[i].tWhite - measurements[i].tBlack;
+        printf("[%d] -> t_gesamt: %d ms \t t_umschalt: %d ms\n", i, tGesamt, tUmschalt);
     }
     return;
 
@@ -251,12 +263,15 @@ draw_screen_test(struct FbDev* fb_device) {
 void
 draw_screen_calib_bw_digits(struct FbDev* fb_device) {
     /* Black and white digits calibration screen */
-    if(!uart_send_command(CTRL_CMD_CALIB_MODE)) {
+    uint32_t w = fb_device->w;
+    uint32_t h = fb_device->h;
+
+    if(!uart_send_command(CTRL_CMD_CALIB_MODE, true)) {
         /* Failed to set STM8 in calibration mode, exit */
         return;
     }
 
-    char receiveBuf[10];
+    bool m_failed_test = false;
 
     /* STM8 is in calibration mode */
     while(1) {
@@ -265,36 +280,55 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
         fb_update(fb_device);
         sleep(1);
 
-        if(!uart_send_command(CTRL_CMD_CALIB_BLACK)) {
-            /* Failed to set black screen mode, exit */
-	        printf("** FAILED BLACK SCREEN TEST!\n");
-            return;
+        if(!uart_send_command(CTRL_CMD_CALIB_BLACK, false)) {
+            m_failed_test = true;
+            break;
         }
 
-        sleep(5);
+        /* Wait for device's response */
+        if(!uart_receive_response(8, "BLACK OK", false)) {
+            m_failed_test = true;
+            break;
+        }
 
         /* Show white screen */
         fb_draw_filled_screen(fb_device, COLOR_WHITE);
         fb_update(fb_device);
         sleep(1);
 
-        if(!uart_send_command(CTRL_CMD_CALIB_WHITE)) {
-            /* Failed to set black screen mode, exit */
-	        printf("** FAILED WHITE SCREEN TEST!\n");
-            return;
+        if(!uart_send_command(CTRL_CMD_CALIB_WHITE, true)) {
+            m_failed_test = true;
+            break;
         }
-        if(uart_receive_response(8, "CALIB OK")) {
-            printf("** CALIB OK -> TRUE **\n");
-        } else {
-            printf("## ERROR CALIB ##\n");
+        if(!uart_receive_response(8, "CALIB OK", false)) {
+            m_failed_test = true;
         }
-
         break;
     }
 
+    /* Show calibration test status on screen */
     fb_clear_screen(fb_device);
     fb_update(fb_device);
-    sleep(1);
+
+    while(framebuf_state.state == FBSTATE_IDLE) {
+        if(!m_failed_test) {
+            fb_draw_rect(fb_device, 0, 0, w / 2, 200, COLOR_WHITE, DRAW_CENTER_HORIZONTAL);
+            fb_draw_rect(fb_device, 0, 0, w / 2, 100, COLOR_GREEN, DRAW_CENTER_HORIZONTAL);
+            fb_draw_text(fb_device, "Calibration successful!", 0, 40, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+            fb_draw_text(fb_device, "The device has been successfully calibrated!", 0, 140, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+
+        } else {
+            fb_draw_rect(fb_device, 0, 0, w / 2, 200, COLOR_WHITE, DRAW_CENTER_HORIZONTAL);
+            fb_draw_text(fb_device, "- Press START to retry -", 0, 145, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+
+            fb_draw_rect(fb_device, 0, 0, w / 2, 100, COLOR_RED, DRAW_CENTER_HORIZONTAL);
+            fb_draw_text(fb_device, "Calibration failed!", 0, 40, COLOR_WHITE, DRAW_CENTER_HORIZONTAL);
+        }
+
+        fb_update(fb_device);
+        usleep(10000 / 60);
+    }
+
 }
 
 void
