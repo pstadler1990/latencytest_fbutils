@@ -5,6 +5,12 @@
 #ifndef FB_MAIN_H
 #define FB_MAIN_H
 
+struct Measurement {
+    uint32_t tTrigger;
+    uint32_t tBlack;
+    uint32_t tWhite;
+};
+
 typedef enum {
     FBSTATE_ERROR_MEASURE = -2,             /* Error whilst measurement */
     FBSTATE_ERROR = -1,                     /* General, unknown error */
