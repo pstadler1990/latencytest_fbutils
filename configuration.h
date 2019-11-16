@@ -20,4 +20,9 @@
 #define GPIO_INT_ROT_B              ((unsigned int)19)      /* Physical pin 35, BCM pin 19*/
 #define GPIO_INT_ROT_SW             ((unsigned int)13)      /* Physical pin 33, BCM pin 13*/
 
+#define GPIO_INT_CALIB_SW           ((unsigned int)21)      /* Physical pin 40, BCM pin 21*/
+#define GPIO_INT_START_SW           ((unsigned int)20)      /* Physical pin 38, BCM pin 20*/
+#define GPIO_EXT_CALIB_LED          ((unsigned int)16)      /* Physical pin 36, BCM pin 16*/
+#define GPIO_EXT_START_LED          ((unsigned int)12)      /* Physical pin 32, BCM pin 12*/
+
 #endif //FB_CONFIGURATION_H

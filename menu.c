@@ -7,17 +7,34 @@
 #include <printf.h>
 #include "menu.h"
 #include "configuration.h"
+#include "main.h"
 
+extern struct FbDevState framebuf_state;
 
 static int last_state_a = 0;
 static unsigned int last_poll_time = 0;
-
 static void menu_rot_changed(ROT_STATE state);
 
 void
 menu_switch_pressed(void) {
     /* */
     printf("** Switch interrupt **\n");
+}
+
+void
+calib_switch_pressed(void) {
+    /* */
+    printf("** CALIB interrupt **\n");
+    framebuf_state.mode = FBMODE_CALIB;
+    framebuf_state.state = FBSTATE_INITIALIZE;
+}
+
+void
+start_switch_pressed(void) {
+    /* */
+    printf("** START interrupt **\n");
+    framebuf_state.mode = FBMODE_TEST;
+    framebuf_state.state = FBSTATE_INITIALIZE;
 }
 
 void

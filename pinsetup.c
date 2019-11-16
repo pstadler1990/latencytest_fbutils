@@ -11,6 +11,9 @@
 #include "menu.h"
 
 static void _rot_switch_isr(int gpio, int level, uint32_t tick);
+static void _calib_switch_isr(int gpio, int level, uint32_t tick);
+static void _start_switch_isr(int gpio, int level, uint32_t tick);
+
 
 int8_t
 init_GPIOs(void) {
@@ -46,6 +49,24 @@ init_GPIOs(void) {
     gpioSetMode(GPIO_INT_ROT_SW, PI_INPUT);
     gpioSetISRFunc(GPIO_INT_ROT_SW, RISING_EDGE, -1, _rot_switch_isr);
 
+    /* Calibration switch, IN digital */
+    gpioSetMode(GPIO_INT_CALIB_SW, PI_INPUT);
+    gpioSetISRFunc(GPIO_INT_CALIB_SW, RISING_EDGE, -1, _calib_switch_isr);
+
+    /* Start switch, IN digital */
+    gpioSetMode(GPIO_INT_START_SW, PI_INPUT);
+    gpioSetISRFunc(GPIO_INT_START_SW, RISING_EDGE, -1, _start_switch_isr);
+
+    /* Calib switch LED MODE_DIGITAL */
+    gpioSetMode(GPIO_EXT_CALIB_LED, PI_OUTPUT);
+    gpioSetPullUpDown(GPIO_EXT_CALIB_LED, PI_PUD_UP);
+    gpioWrite(GPIO_EXT_CALIB_LED, 0);
+
+    /* Start switch LED MODE_DIGITAL */
+    gpioSetMode(GPIO_EXT_START_LED, PI_OUTPUT);
+    gpioSetPullUpDown(GPIO_EXT_START_LED, PI_PUD_UP);
+    gpioWrite(GPIO_EXT_START_LED, 0);
+
     return 1;
 }
 
@@ -54,5 +75,21 @@ _rot_switch_isr(int gpio, int level, uint32_t tick) {
     /* Interrupt service routine ISR for rotary encoder switch */
     if(gpioRead(GPIO_INT_ROT_SW)) {
         menu_switch_pressed();
+    }
+}
+
+void
+_calib_switch_isr(int gpio, int level, uint32_t tick) {
+    /* Interrupt service routine ISR for calibration switch */
+    if(gpioRead(GPIO_INT_CALIB_SW)) {
+        calib_switch_pressed();
+    }
+}
+
+void
+_start_switch_isr(int gpio, int level, uint32_t tick) {
+    /* Interrupt service routine ISR for start switch */
+    if(gpioRead(GPIO_INT_START_SW)) {
+        start_switch_pressed();
     }
 }
