@@ -17,14 +17,18 @@ typedef enum {
     FBSTATE_INITIALIZE = 0,                 /* Pre-idle state */
     FBSTATE_IDLE,                           /* Waiting, idle */
     FBSTATE_READY_FOR_MEASUREMENTS,         /* Conditions clear for (next) measurement series */
-    FBSTATE_TRIGGERED,                      /* External trigger to start measurements (series) occurred */
-    FBSTATE_READY_FOR_MEASURE,              /* Conditions clear for (next) measure (single measure) */
-    FBSTATE_FINISHED_MEASURE,               /* Finished single measurement */
-    FB_STATE_FINISHED_ALL_MEASUREMENTS,     /* Finished all measurements (end of series) */
+    FBSTATE_READY,                          /* Conditions clear for (next) measure (single measure) */
 } FB_STATE;
+
+typedef enum {
+    FBMODE_HOME,
+    FBMODE_TEST,
+    FBMODE_CALIB,
+} FB_MODE;
 
 struct FbDevState {
     FB_STATE state;                         /* Internal state machine */
+    FB_MODE mode;                           /* Internal mode */
     /* TODO: configuration here */
     uint32_t n_measurements;                /* Number of measurements per series, default = 100 */
 };

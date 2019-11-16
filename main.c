@@ -12,6 +12,7 @@
 struct FbDevState framebuf_state = {
         .state = FBSTATE_INITIALIZE,
         .n_measurements = DEFAULT_N_MEASUREMENTS,
+        .mode = FBMODE_HOME,
 };
 int uart0_filestream = -1;
 
@@ -38,9 +39,22 @@ main() {
         /* Show screens */
         framebuf_state.state = FBSTATE_IDLE;
 
-//        draw_screen_calib_bw_digits(&framebuf_device);
+        while(1) {
+            switch(framebuf_state.mode) {
+                case FBMODE_HOME:
+                default:
+                    draw_screen_home(&framebuf_device);
+                    break;
+                case FBMODE_CALIB:
+                    draw_screen_calib_bw_digits(&framebuf_device);
+                    break;
+                case FBMODE_TEST:
+                    draw_screen_test(&framebuf_device);
+                    break;
+            }
+        }
+
         //draw_screen_alternating(&framebuf_device);
-	draw_screen_test(&framebuf_device);
 
         close(uart0_filestream);
         fb_close(&framebuf_device);
