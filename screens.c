@@ -50,55 +50,56 @@ draw_screen_home(struct FbDev* fb_device) {
        - Rotary encoder (navigation) changes settings */
     while(framebuf_state.state == FBSTATE_IDLE) {
 
-        clock_gettime(CLOCK_MONOTONIC_RAW, &refresh_time_start);
-        __time_t delta_us = (refresh_time_end.tv_sec - refresh_time_start.tv_sec) * 1000000 + (refresh_time_end.tv_nsec - refresh_time_start.tv_nsec) / 1000;
+//        clock_gettime(CLOCK_MONOTONIC_RAW, &refresh_time_start);
+//        __time_t delta_us = (refresh_time_end.tv_sec - refresh_time_start.tv_sec) * 1000000 + (refresh_time_end.tv_nsec - refresh_time_start.tv_nsec) / 1000;
+//
+//        if(delta_us > (1000000 / 60)) {
+        /* Bouncing rect */
+        fb_draw_rect(fb_device, xx, yy, 100, 100, bb_colors[bb_color_index], DRAW_CENTER_NONE);
 
-        if(delta_us > (1000000 / 60)) {
-            /* Bouncing rect */
-            fb_draw_rect(fb_device, xx, yy, 100, 100, bb_colors[bb_color_index], DRAW_CENTER_NONE);
+        fb_draw_line(fb_device, 0, 0, w, h, COLOR_WHITE);
+        fb_draw_line(fb_device, w, 0, 0, h, COLOR_WHITE);
+        fb_draw_rect(fb_device, 0, 0, w / 2, h / 2, COLOR_WHITE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
 
-            fb_draw_line(fb_device, 0, 0, w, h, COLOR_WHITE);
-            fb_draw_line(fb_device, w, 0, 0, h, COLOR_WHITE);
-            fb_draw_rect(fb_device, 0, 0, w / 2, h / 2, COLOR_WHITE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+        fb_draw_rect(fb_device, 0, 0, 30, 30, COLOR_RED, DRAW_CENTER_NONE);
+        fb_draw_rect(fb_device, w - 30, 0, 30, 30, COLOR_GREEN, DRAW_CENTER_NONE);
+        fb_draw_rect(fb_device, 0, h - 30, 30, 30, COLOR_BLUE, DRAW_CENTER_NONE);
+        fb_draw_rect(fb_device, w - 30, h - 30, 30, 30, COLOR_YELLOW, DRAW_CENTER_NONE);
 
-            fb_draw_rect(fb_device, 0, 0, 30, 30, COLOR_RED, DRAW_CENTER_NONE);
-            fb_draw_rect(fb_device, w - 30, 0, 30, 30, COLOR_GREEN, DRAW_CENTER_NONE);
-            fb_draw_rect(fb_device, 0, h - 30, 30, 30, COLOR_BLUE, DRAW_CENTER_NONE);
-            fb_draw_rect(fb_device, w - 30, h - 30, 30, 30, COLOR_YELLOW, DRAW_CENTER_NONE);
+        /* Texts */
+        fb_draw_text(fb_device, display_info_str, 0, (h / 4) - 80, COLOR_BLACK,
+                     DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+        fb_draw_text(fb_device, bpp_info_str, 0, ((h / 4) - 60), COLOR_BLACK,
+                     DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
 
-            /* Texts */
-            fb_draw_text(fb_device, display_info_str, 0, (h / 4) - 80, COLOR_BLACK,
+        if (framebuf_state.state == FBSTATE_IDLE) {
+            fb_draw_text(fb_device, "- Waiting for device. Place device on display -", 0, (h / 4) - 20, COLOR_RED,
                          DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
-            fb_draw_text(fb_device, bpp_info_str, 0, ((h / 4) - 60), COLOR_BLACK,
+        } else if (framebuf_state.state == FBSTATE_READY_FOR_MEASUREMENTS) {
+            fb_draw_text(fb_device, "- Ready! Press START to begin measurements -", 0, (h / 4) - 20, COLOR_BLUE,
                          DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
-
-            if (framebuf_state.state == FBSTATE_IDLE) {
-                fb_draw_text(fb_device, "- Waiting for device. Place device on display -", 0, (h / 4) - 20, COLOR_RED,
-                             DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
-            } else if (framebuf_state.state == FBSTATE_READY_FOR_MEASUREMENTS) {
-                fb_draw_text(fb_device, "- Ready! Press START to begin measurements -", 0, (h / 4) - 20, COLOR_BLUE,
-                             DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
-            }
-
-            /* Bouncing rect animation */
-            yy += ys;
-            xx += xs;
-            if ((xx + 100 == w) || (xx == 0)) {
-                xs = -xs;
-                bb_color_index += 1;
-            }
-            if ((yy + 100 == h) || (yy == 0)) {
-                ys = -ys;
-                bb_color_index += 1;
-            }
-            if (bb_color_index > 4) {
-                bb_color_index = 0;
-            }
-
-            /* Update buffers */
-            fb_update(fb_device);
         }
-        clock_gettime(CLOCK_MONOTONIC_RAW, &refresh_time_end);
+
+        /* Bouncing rect animation */
+        yy += ys;
+        xx += xs;
+        if ((xx + 100 == w) || (xx == 0)) {
+            xs = -xs;
+            bb_color_index += 1;
+        }
+        if ((yy + 100 == h) || (yy == 0)) {
+            ys = -ys;
+            bb_color_index += 1;
+        }
+        if (bb_color_index > 4) {
+            bb_color_index = 0;
+        }
+
+        /* Update buffers */
+        fb_update(fb_device);
+        usleep(10000 / 60);
+//        }
+//        clock_gettime(CLOCK_MONOTONIC_RAW, &refresh_time_end);
     }
 }
 
@@ -110,6 +111,8 @@ draw_screen_test(struct FbDev* fb_device) {
     uint32_t w = fb_device->w;
     uint32_t h = fb_device->h;
     char receiveBuf[BUF_SIZE];
+
+    double execTimes[BUF_SIZE];
 
     /* Test screen procedure */
     uint32_t m_done = 0;
@@ -123,25 +126,31 @@ draw_screen_test(struct FbDev* fb_device) {
     }
 
     /* STM8 is in test mode */
+    /* Turn on start switch LED */
+    gpioWrite(GPIO_EXT_START_LED, 1);
+    gpioWrite(GPIO_EXT_CALIB_LED, 0);
 
     while(m_done < DEFAULT_N_MEASUREMENTS) {
-	printf("Measurement %d\n", m_done);
         /* Show black screen */
         fb_clear_screen(fb_device);
         fb_update(fb_device);
-        sleep(1);
 
-        fb_draw_filled_screen(fb_device, COLOR_WHITE);
-	//fb_update(fb_device);
-
-        /*  Send TRIGGER to STM8 */
         gpioWrite(GPIO_EXT_TRIGGER_OUT, 0);
         usleep(100);
-        gpioWrite(GPIO_EXT_TRIGGER_OUT, 1);
-        clock_t time_start = clock();
 
-	//usleep(100);
+        usleep((rand() % 2000) * 1000);
+
+        //fb_draw_filled_screen(fb_device, COLOR_WHITE);
+        fb_draw_rect(fb_device, w - 150, h - 150, 150, 150, COLOR_WHITE, DRAW_CENTER_NONE);
+	    //fb_update(fb_device);
+
+        /*  Send TRIGGER to STM8 */
+        gpioWrite(GPIO_EXT_TRIGGER_OUT, 1);
+
+	    //usleep(100);
         fb_update(fb_device);
+        // TODO: Set debug pin to indicate start
+        clock_t time_start = clock();
 
         /* Wait until MEAS_COMPLETE pin is set by STM8 */
         if(!uart_receive_response(7, "MEAS OK", false)) {
@@ -150,6 +159,8 @@ draw_screen_test(struct FbDev* fb_device) {
                 break;
             }
         }
+        clock_t time_end = clock();
+        execTimes[m_done] = ((double)(time_end - time_start) / CLOCKS_PER_SEC);
         m_done++;
     }
 
@@ -217,15 +228,22 @@ draw_screen_test(struct FbDev* fb_device) {
     };
     printf("received measurement data\n");
 
+    double tAvg, tAvgUmschalt;
+    double tSum = 0;
+    double tSumUmschalt = 0;
     for(uint32_t i = 0; i < DEFAULT_N_MEASUREMENTS; i++) {
 	    //printf("Receive (%d) -> %d %d %d\n", i, measurements[i].tTrigger, measurements[i].tBlack, measurements[i].tWhite);
-	    uint32_t tGesamt = measurements[i].tWhite - measurements[i].tTrigger;
+	    double tGesamt = (measurements[i].tWhite - measurements[i].tTrigger) - execTimes[i];
+	    tSum += tGesamt;
 	    uint32_t tUmschalt = measurements[i].tWhite - measurements[i].tBlack;
-        printf("[%d] -> t_gesamt: %d ms \t t_umschalt: %d ms\n", i, tGesamt, tUmschalt);
+	    tSumUmschalt += tUmschalt;
+        printf("[%d] -> t_gesamt: %f ms \t t_umschalt: %d ms\n", i, tGesamt, tUmschalt);
     }
-    return;
 
-    while(framebuf_state.state == FBSTATE_IDLE) {
+    tAvg = tSum / DEFAULT_N_MEASUREMENTS;
+    tAvgUmschalt = tSumUmschalt / DEFAULT_N_MEASUREMENTS;
+
+    while(framebuf_state.mode == FBMODE_TEST) {
 
         if(!m_failed_test) {
             fb_draw_rect(fb_device, 0, 0, w / 2, h / 2, COLOR_WHITE, DRAW_CENTER_HORIZONTAL);
@@ -233,31 +251,31 @@ draw_screen_test(struct FbDev* fb_device) {
             fb_draw_rect(fb_device, 0, 0, w / 2, 100, COLOR_GREEN, DRAW_CENTER_HORIZONTAL);
             char m_complete_info[100];
             sprintf(m_complete_info, "Measurement valid (%d/%d failed)", m_failed, DEFAULT_N_MEASUREMENTS);
-
             fb_draw_text(fb_device, m_complete_info, 0, 40, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
 
-            /* Show results from UART */
-            for(uint32_t i=0; i < DEFAULT_N_MEASUREMENTS + 1; i++) {
-                char str_data[50];
-                sprintf(str_data, "(%d): %d", i, receiveBuf[i]);
+            /* Results */
+            char str_dataAvg[50];
+            sprintf(str_dataAvg, "Average display lag: %f ms", tAvg);
+            fb_draw_text(fb_device, str_dataAvg, 0, 60, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
 
-                fb_draw_text(fb_device, str_data, 0, 60 + (i * 20), COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
-            }
-
+            char str_dataAvgUmschalt[50];
+            sprintf(str_dataAvgUmschalt, "Average switching times: %f ms", tAvgUmschalt);
+            fb_draw_text(fb_device, str_dataAvgUmschalt, 0, 80, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
         } else {
             fb_draw_rect(fb_device, 0, 0, w / 2, 200, COLOR_WHITE, DRAW_CENTER_HORIZONTAL);
             fb_draw_text(fb_device, "- Press START to retry -", 0, 145, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
 
             fb_draw_rect(fb_device, 0, 0, w / 2, 100, COLOR_RED, DRAW_CENTER_HORIZONTAL);
             fb_draw_text(fb_device, "Measurement invalid - too many failures", 0, 40, COLOR_WHITE, DRAW_CENTER_HORIZONTAL);
-
-            // TODO: Show text "Press START to retry measurements"
         }
 
         /* Update buffers */
         fb_update(fb_device);
         usleep(10000 / 60);
     }
+
+    /* Turn off start switch LED */
+    gpioWrite(GPIO_EXT_START_LED, 0);
 }
 
 void
@@ -271,7 +289,12 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
         return;
     }
 
+    /* Turn on calib switch LED */
+    gpioWrite(GPIO_EXT_CALIB_LED, 1);
+    gpioWrite(GPIO_EXT_START_LED, 0);
+
     bool m_failed_test = false;
+    framebuf_state.state = FBSTATE_READY;
 
     /* STM8 is in calibration mode */
     while(1) {
@@ -310,7 +333,9 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
     fb_clear_screen(fb_device);
     fb_update(fb_device);
 
-    while(framebuf_state.state == FBSTATE_IDLE) {
+    framebuf_state.state = FBSTATE_IDLE;
+
+    while(framebuf_state.mode == FBMODE_CALIB) {
         if(!m_failed_test) {
             fb_draw_rect(fb_device, 0, 0, w / 2, 200, COLOR_WHITE, DRAW_CENTER_HORIZONTAL);
             fb_draw_rect(fb_device, 0, 0, w / 2, 100, COLOR_GREEN, DRAW_CENTER_HORIZONTAL);
@@ -329,6 +354,8 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
         usleep(10000 / 60);
     }
 
+    /* Turn off calib switch LED */
+    gpioWrite(GPIO_EXT_CALIB_LED, 0);
 }
 
 void
