@@ -18,13 +18,13 @@ static void menu_rot_changed(ROT_STATE state);
 void
 menu_switch_pressed(void) {
     /* */
-    printf("** Switch interrupt **\n");
+    framebuf_state.mode = FBMODE_HOME;
+    framebuf_state.state = FBSTATE_IDLE;
 }
 
 void
 calib_switch_pressed(void) {
     /* */
-    printf("** CALIB interrupt **\n");
     framebuf_state.mode = FBMODE_CALIB;
     framebuf_state.state = FBSTATE_INITIALIZE;
 }
@@ -32,7 +32,9 @@ calib_switch_pressed(void) {
 void
 start_switch_pressed(void) {
     /* */
-    printf("** START interrupt **\n");
+    if(!framebuf_state.isCalibrated) {
+        return;
+    }
     framebuf_state.mode = FBMODE_TEST;
     framebuf_state.state = FBSTATE_INITIALIZE;
 }
