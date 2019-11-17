@@ -110,3 +110,26 @@ uart_receive_response(const uint32_t responseLen, const char* response, bool tim
     }
     return 0;
 }
+
+uint8_t
+com_get_display_name(char* nameBuf, size_t nameBufSize) {
+    /* Stores the name of the attached monitor (if possible) in the given buffer
+       Uses popen to process external command tvservice */
+    char tmpBuf[EDID_MAX_DISPLAY_NAME];    //device_name=
+
+    FILE* fp = popen("tvservice -n", "r");
+    if(!fp) {
+       return 0;
+    }
+
+    while(fgets(tmpBuf, EDID_MAX_DISPLAY_NAME + 1, fp));
+
+    tmpBuf[strlen(tmpBuf) - 1] = '\0';
+    memcpy(nameBuf, &tmpBuf[12], nameBufSize + 1);
+
+    if(pclose(fp)) {
+        return 0;
+    }
+
+    return 1;
+}

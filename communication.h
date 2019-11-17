@@ -22,4 +22,5 @@ uint8_t uart_send(const uint8_t* buf, size_t len);
 int uart_receive(char* buf, size_t len);
 uint8_t uart_send_command(UART_CTRL_COMMAND command, bool timed);
 uint8_t uart_receive_response(uint32_t responseLen, const char* response, bool timed);
+uint8_t com_get_display_name(char* nameBuf, size_t nameBufSize);
 #endif //FB_COMMUNICATION_H
