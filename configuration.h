@@ -5,10 +5,12 @@
 #ifndef FB_CONFIGURATION_H
 #define FB_CONFIGURATION_H
 
-#define DEFAULT_N_MEASUREMENTS      ((uint32_t)100)        /* Number of single measurements per series */
+#define DEFAULT_N_MEASUREMENTS      ((uint32_t)20)        /* Number of single measurements per series */
 #define MAX_FAILED_MEASUREMENTS     ((uint32_t)10)         /* Maximum number of failed measurements within a single test */
 #define MEASUREMENT_TIMEOUT         ((uint32_t)1000000)    /* Maximum timeout */
 #define ROT_DEBOUNCE_TIME           ((uint32_t)100)
+
+#define EDID_MAX_DISPLAY_NAME       ((uint32_t)64)
 
 /* GPIOs */
 #define GPIO_EXT_TRIGGER_IN         ((unsigned int)5)       /* Physical pin 29, BCM pin 5 */

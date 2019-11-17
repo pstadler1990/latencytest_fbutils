@@ -5,6 +5,9 @@
 #ifndef FB_MAIN_H
 #define FB_MAIN_H
 
+#include <stdbool.h>
+#include "configuration.h"
+
 struct Measurement {
     uint32_t tTrigger;
     uint32_t tBlack;
@@ -27,10 +30,12 @@ typedef enum {
 } FB_MODE;
 
 struct FbDevState {
-    FB_STATE state;                         /* Internal state machine */
-    FB_MODE mode;                           /* Internal mode */
-    /* TODO: configuration here */
-    uint32_t n_measurements;                /* Number of measurements per series, default = 100 */
+    FB_STATE state;                             /* Internal state machine */
+    FB_MODE mode;                               /* Internal mode */
+    uint32_t n_measurements;                    /* Number of measurements per series, default = 100 */
+
+    bool isCalibrated;
+    char displayName[EDID_MAX_DISPLAY_NAME];    /* Manufacturer's display name (edid) */
 };
 
 #endif //FB_MAIN_H

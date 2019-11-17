@@ -13,6 +13,7 @@ struct FbDevState framebuf_state = {
         .state = FBSTATE_INITIALIZE,
         .n_measurements = DEFAULT_N_MEASUREMENTS,
         .mode = FBMODE_HOME,
+        .isCalibrated = false,
 };
 int uart0_filestream = -1;
 
@@ -38,6 +39,11 @@ main() {
 
         /* Show screens */
         framebuf_state.state = FBSTATE_IDLE;
+
+        /* Read monitor name */
+        if(com_get_display_name(framebuf_state.displayName, EDID_MAX_DISPLAY_NAME)) {
+            printf("Display name successfully received: %s\n", framebuf_state.displayName);
+        }
 
         while(1) {
             switch(framebuf_state.mode) {
