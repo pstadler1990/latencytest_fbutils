@@ -40,21 +40,17 @@ draw_screen_home(struct FbDev* fb_device) {
 
     char display_info_str[50];
     char bpp_info_str[20];
+    char display_name_str[EDID_MAX_DISPLAY_NAME + 20];
 
     sprintf(display_info_str, "Screen Resolution: %dx%d", w, h);
     sprintf(bpp_info_str, "Color depth: %d", fb_device->bpp);
+    sprintf(display_name_str, "Display name: %s", framebuf_state.displayName);
 
     /* Drawing idle / welcome screen
        This screen can only be exit on external triggers
        - START button fires next state: FBSTATE_TRIGGERED
        - Rotary encoder (navigation) changes settings */
-    while(framebuf_state.state == FBSTATE_IDLE) {
-
-//        clock_gettime(CLOCK_MONOTONIC_RAW, &refresh_time_start);
-//        __time_t delta_us = (refresh_time_end.tv_sec - refresh_time_start.tv_sec) * 1000000 + (refresh_time_end.tv_nsec - refresh_time_start.tv_nsec) / 1000;
-//
-//        if(delta_us > (1000000 / 60)) {
-        /* Bouncing rect */
+    while(framebuf_state.mode == FBMODE_HOME) {
         fb_draw_rect(fb_device, xx, yy, 100, 100, bb_colors[bb_color_index], DRAW_CENTER_NONE);
 
         fb_draw_line(fb_device, 0, 0, w, h, COLOR_WHITE);
@@ -67,17 +63,14 @@ draw_screen_home(struct FbDev* fb_device) {
         fb_draw_rect(fb_device, w - 30, h - 30, 30, 30, COLOR_YELLOW, DRAW_CENTER_NONE);
 
         /* Texts */
-        fb_draw_text(fb_device, display_info_str, 0, (h / 4) - 80, COLOR_BLACK,
-                     DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
-        fb_draw_text(fb_device, bpp_info_str, 0, ((h / 4) - 60), COLOR_BLACK,
-                     DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+        fb_draw_text(fb_device, display_name_str, 0, 0, COLOR_BLACK, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+        fb_draw_text(fb_device, display_info_str, 0, 20, COLOR_BLACK, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+        fb_draw_text(fb_device, bpp_info_str, 0, 40, COLOR_BLACK, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
 
-        if (framebuf_state.state == FBSTATE_IDLE) {
-            fb_draw_text(fb_device, "- Waiting for device. Place device on display -", 0, (h / 4) - 20, COLOR_RED,
-                         DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
-        } else if (framebuf_state.state == FBSTATE_READY_FOR_MEASUREMENTS) {
-            fb_draw_text(fb_device, "- Ready! Press START to begin measurements -", 0, (h / 4) - 20, COLOR_BLUE,
-                         DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+        if (!framebuf_state.isCalibrated) {
+            fb_draw_text(fb_device, "* Device is not calibrated yet - please calibrate first *", 0, 80, COLOR_RED, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+        } else {
+            fb_draw_text(fb_device, "- Ready! Press START to begin measurements -", 0, 80, COLOR_BLUE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
         }
 
         /* Bouncing rect animation */
@@ -97,9 +90,7 @@ draw_screen_home(struct FbDev* fb_device) {
 
         /* Update buffers */
         fb_update(fb_device);
-        usleep(10000 / 60);
-//        }
-//        clock_gettime(CLOCK_MONOTONIC_RAW, &refresh_time_end);
+        usleep(100000 / 60);
     }
 }
 
@@ -107,6 +98,8 @@ void
 draw_screen_test(struct FbDev* fb_device) {
 
 #define BUF_SIZE ((uint32_t)100)
+
+    // TODO: Add check for isCalibrated -> if not: show message and return to home!
 
     uint32_t w = fb_device->w;
     uint32_t h = fb_device->h;
@@ -136,20 +129,18 @@ draw_screen_test(struct FbDev* fb_device) {
         fb_update(fb_device);
 
         gpioWrite(GPIO_EXT_TRIGGER_OUT, 0);
-        usleep(100);
 
-        usleep((rand() % 2000) * 1000);
+        srand(time(0));
+        usleep(((rand() % 2000) + 1000) * 1000);
 
         //fb_draw_filled_screen(fb_device, COLOR_WHITE);
+	    fb_draw_rect(fb_device, 0, 0, 150, 150, COLOR_WHITE, DRAW_CENTER_NONE);
         fb_draw_rect(fb_device, w - 150, h - 150, 150, 150, COLOR_WHITE, DRAW_CENTER_NONE);
-	    //fb_update(fb_device);
 
         /*  Send TRIGGER to STM8 */
         gpioWrite(GPIO_EXT_TRIGGER_OUT, 1);
 
-	    //usleep(100);
         fb_update(fb_device);
-        // TODO: Set debug pin to indicate start
         clock_t time_start = clock();
 
         /* Wait until MEAS_COMPLETE pin is set by STM8 */
@@ -190,7 +181,6 @@ draw_screen_test(struct FbDev* fb_device) {
     uint32_t lastReceivedTimeout = MEASUREMENT_TIMEOUT;
 
     while(is_receiving) {
-
         if((receivePtr + 1 > DEFAULT_N_MEASUREMENTS) || --lastReceivedTimeout == 0) {
             is_receiving = false;
         }
@@ -234,14 +224,21 @@ draw_screen_test(struct FbDev* fb_device) {
     for(uint32_t i = 0; i < DEFAULT_N_MEASUREMENTS; i++) {
 	    //printf("Receive (%d) -> %d %d %d\n", i, measurements[i].tTrigger, measurements[i].tBlack, measurements[i].tWhite);
 	    double tGesamt = (measurements[i].tWhite - measurements[i].tTrigger) - execTimes[i];
-	    tSum += tGesamt;
 	    uint32_t tUmschalt = measurements[i].tWhite - measurements[i].tBlack;
-	    tSumUmschalt += tUmschalt;
+
+	    if(i > 2 && i < DEFAULT_N_MEASUREMENTS - 2) {
+            tSum += tGesamt;
+            tSumUmschalt += tUmschalt;
+	    }
+
         printf("[%d] -> t_gesamt: %f ms \t t_umschalt: %d ms\n", i, tGesamt, tUmschalt);
     }
 
-    tAvg = tSum / DEFAULT_N_MEASUREMENTS;
-    tAvgUmschalt = tSumUmschalt / DEFAULT_N_MEASUREMENTS;
+    tAvg = tSum / (DEFAULT_N_MEASUREMENTS - 4);
+    tAvgUmschalt = tSumUmschalt / (DEFAULT_N_MEASUREMENTS - 4);
+
+    /* Turn off start switch LED */
+    gpioWrite(GPIO_EXT_START_LED, 0);
 
     while(framebuf_state.mode == FBMODE_TEST) {
 
@@ -273,9 +270,6 @@ draw_screen_test(struct FbDev* fb_device) {
         fb_update(fb_device);
         usleep(10000 / 60);
     }
-
-    /* Turn off start switch LED */
-    gpioWrite(GPIO_EXT_START_LED, 0);
 }
 
 void
@@ -283,6 +277,8 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
     /* Black and white digits calibration screen */
     uint32_t w = fb_device->w;
     uint32_t h = fb_device->h;
+
+    framebuf_state.isCalibrated = false;
 
     if(!uart_send_command(CTRL_CMD_CALIB_MODE, true)) {
         /* Failed to set STM8 in calibration mode, exit */
@@ -335,6 +331,11 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
 
     framebuf_state.state = FBSTATE_IDLE;
 
+    /* Turn off calib switch LED */
+    gpioWrite(GPIO_EXT_CALIB_LED, 0);
+
+    framebuf_state.isCalibrated = true;
+
     while(framebuf_state.mode == FBMODE_CALIB) {
         if(!m_failed_test) {
             fb_draw_rect(fb_device, 0, 0, w / 2, 200, COLOR_WHITE, DRAW_CENTER_HORIZONTAL);
@@ -353,9 +354,6 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
         fb_update(fb_device);
         usleep(10000 / 60);
     }
-
-    /* Turn off calib switch LED */
-    gpioWrite(GPIO_EXT_CALIB_LED, 0);
 }
 
 void
