@@ -1,1 +1,1 @@
-gcc -Wall -pthread -o prog prog.c -lpigpio -lrt
+gcc -Wall -pthread -o fbutils main.c communication.c fb_lib.c menu.c pinsetup.c screens.c calculcations.c -lpigpio -lrt -lpthread
