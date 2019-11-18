@@ -13,6 +13,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include "communication.h"
+#include "calculations.h"
 
 extern struct FbDevState framebuf_state;
 
@@ -134,7 +135,7 @@ draw_screen_test(struct FbDev* fb_device) {
         usleep(((rand() % 2000) + 1000) * 1000);
 
         //fb_draw_filled_screen(fb_device, COLOR_WHITE);
-	    fb_draw_rect(fb_device, 0, 0, 150, 150, COLOR_WHITE, DRAW_CENTER_NONE);
+        fb_draw_rect(fb_device, 0, 0, 150, 150, COLOR_WHITE, DRAW_CENTER_NONE);
         fb_draw_rect(fb_device, w - 150, h - 150, 150, 150, COLOR_WHITE, DRAW_CENTER_NONE);
 
         /*  Send TRIGGER to STM8 */
@@ -211,31 +212,48 @@ draw_screen_test(struct FbDev* fb_device) {
                         measurements[receivePtr].tBlack = measurementTmpBuf[1];
                         measurements[receivePtr].tWhite = measurementTmpBuf[2];
                         m_index = 0;
-		            }
+                    }
                 }
             }
         }
     };
     printf("received measurement data\n");
 
+    /* Calculate average */
     double tAvg, tAvgUmschalt;
     double tSum = 0;
     double tSumUmschalt = 0;
-    for(uint32_t i = 0; i < DEFAULT_N_MEASUREMENTS; i++) {
-	    //printf("Receive (%d) -> %d %d %d\n", i, measurements[i].tTrigger, measurements[i].tBlack, measurements[i].tWhite);
-	    double tGesamt = (measurements[i].tWhite - measurements[i].tTrigger) - execTimes[i];
-	    uint32_t tUmschalt = measurements[i].tWhite - measurements[i].tBlack;
+    uint32_t n = 0;
+    uint32_t mBufGesamt[DEFAULT_N_MEASUREMENTS - 4];
+    uint32_t mBufUmschalt[DEFAULT_N_MEASUREMENTS - 4];
 
-	    if(i > 2 && i < DEFAULT_N_MEASUREMENTS - 2) {
+    for(uint32_t i = 0; i < DEFAULT_N_MEASUREMENTS; i++) {
+        double tGesamt = (measurements[i].tWhite - measurements[i].tTrigger) - execTimes[i];
+        uint32_t tGesamtDigit = measurements[i].tWhite - measurements[i].tTrigger;
+        uint32_t tUmschalt = measurements[i].tWhite - measurements[i].tBlack;
+
+        if(i > 1 && i < DEFAULT_N_MEASUREMENTS - 2) {
+            mBufGesamt[i] = tGesamtDigit;
+            mBufUmschalt[i] = tUmschalt;
+
             tSum += tGesamt;
             tSumUmschalt += tUmschalt;
-	    }
-
-        printf("[%d] -> t_gesamt: %f ms \t t_umschalt: %d ms\n", i, tGesamt, tUmschalt);
+            n++;
+        }
     }
 
-    tAvg = tSum / (DEFAULT_N_MEASUREMENTS - 4);
-    tAvgUmschalt = tSumUmschalt / (DEFAULT_N_MEASUREMENTS - 4);
+    tAvg = tSum / n;
+    tAvgUmschalt = tSumUmschalt / n;
+
+    /* Calculate median */
+    uint32_t medianGesamt = median_u32(mBufGesamt, DEFAULT_N_MEASUREMENTS - 4);
+    uint32_t medianUmschalt = median_u32(mBufUmschalt, DEFAULT_N_MEASUREMENTS - 4);
+
+    /* Read min and max */
+    uint32_t minGesamt = mBufGesamt[0];
+    uint32_t maxGesamt = mBufGesamt[n];
+    uint32_t minUmschalt = mBufUmschalt[0];
+    uint32_t maxUmschalt = mBufUmschalt[n];
 
     /* Turn off start switch LED */
     gpioWrite(GPIO_EXT_START_LED, 0);
@@ -253,11 +271,27 @@ draw_screen_test(struct FbDev* fb_device) {
             /* Results */
             char str_dataAvg[50];
             sprintf(str_dataAvg, "Average display lag: %f ms", tAvg);
-            fb_draw_text(fb_device, str_dataAvg, 0, 60, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+            fb_draw_text(fb_device, str_dataAvg, 0, 120, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
 
             char str_dataAvgUmschalt[50];
             sprintf(str_dataAvgUmschalt, "Average switching times: %f ms", tAvgUmschalt);
-            fb_draw_text(fb_device, str_dataAvgUmschalt, 0, 80, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+            fb_draw_text(fb_device, str_dataAvgUmschalt, 0, 150, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+
+            char str_dataMedianGesamt[50];
+            sprintf(str_dataMedianGesamt, "Median total lag: %d ms", medianGesamt);
+            fb_draw_text(fb_device, str_dataMedianGesamt, 0, 180, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+
+            char str_dataMedianUmschalt[50];
+            sprintf(str_dataMedianUmschalt, "Median switching times: %d ms", medianUmschalt);
+            fb_draw_text(fb_device, str_dataMedianUmschalt, 0, 210, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+
+            char str_dataMinMaxGesamt[50];
+            sprintf(str_dataMinMaxGesamt, "Min total lag: %d ms | Max total lag: %d ms", minGesamt, maxGesamt);
+            fb_draw_text(fb_device, str_dataMinMaxGesamt, 0, 240, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+
+            char str_dataMinMaxUmschalt[50];
+            sprintf(str_dataMinMaxUmschalt, "Min switching: %d ms | Max switching: %d ms", minUmschalt, maxUmschalt);
+            fb_draw_text(fb_device, str_dataMinMaxUmschalt, 0, 270, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
         } else {
             fb_draw_rect(fb_device, 0, 0, w / 2, 200, COLOR_WHITE, DRAW_CENTER_HORIZONTAL);
             fb_draw_text(fb_device, "- Press START to retry -", 0, 145, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
