@@ -12,6 +12,8 @@
 
 #define EDID_MAX_DISPLAY_NAME       ((uint32_t)64)
 
+#define RESULT_OUTPUT_DIR           "results"
+
 /* GPIOs */
 #define GPIO_EXT_TRIGGER_IN         ((unsigned int)5)       /* Physical pin 29, BCM pin 5 */
 #define GPIO_EXT_TRIGGER_OUT        ((unsigned int)17)      /* Physical pin 11, BCM pin 17 */

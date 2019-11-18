@@ -50,7 +50,6 @@ draw_screen_home(struct FbDev* fb_device) {
     sprintf(bpp_info_str, "Color depth: %d", fb_device->bpp);
     sprintf(display_name_str, "Display name: %s", framebuf_state.displayName);
 
-    uint32_t tCounter = 0;
     /* Drawing idle / welcome screen
        This screen can only be exit on external triggers
        - START button fires next state: FBSTATE_TRIGGERED
@@ -74,15 +73,17 @@ draw_screen_home(struct FbDev* fb_device) {
         fb_draw_text(fb_device, bpp_info_str, 0, 40, COLOR_BLACK, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
 
         if (!framebuf_state.isCalibrated) {
-            fb_draw_text(fb_device, "* Device is not calibrated yet - please calibrate first *", 0, 80, COLOR_RED, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+	    fb_draw_rect(fb_device, 0, 140, w / 2, 60, COLOR_RED, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+            fb_draw_text(fb_device, "* Device is not calibrated yet - please calibrate first *", 0, 140, COLOR_WHITE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
         } else {
-            fb_draw_text(fb_device, "- Ready! Press START to begin measurements -", 0, 80, COLOR_BLUE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+	    fb_draw_rect(fb_device, 0, 140, w / 2, 60, COLOR_BLUE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+            fb_draw_text(fb_device, "- Ready! Press START to begin measurements -", 0, 140, COLOR_WHITE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
         }
 
         char test_number_str[50];
         sprintf(test_number_str, "Test number: %d", testNumber);
-        fb_draw_rect(fb_device, 0, 120, w, 20, COLOR_RED, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
-        fb_draw_text(fb_device, test_number_str, 0, 120, COLOR_BLACK, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+        fb_draw_rect(fb_device, 0, 100, w / 2, 20, COLOR_BLACK, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+        fb_draw_text(fb_device, test_number_str, 0, 100, COLOR_WHITE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
 
         /* Bouncing rect animation */
         yy += ys;
@@ -141,7 +142,7 @@ draw_screen_test(struct FbDev* fb_device) {
         gpioWrite(GPIO_EXT_TRIGGER_OUT, 0);
 
         srand(time(0));
-        usleep(((rand() % 2000) + 1000) * 1000);
+        usleep(((rand() % 500) + 1000) * 1000);
 
         //fb_draw_filled_screen(fb_device, COLOR_WHITE);
         fb_draw_rect(fb_device, 0, 0, 150, 150, COLOR_WHITE, DRAW_CENTER_NONE);
@@ -169,8 +170,6 @@ draw_screen_test(struct FbDev* fb_device) {
     fb_clear_screen(fb_device);
     fb_update(fb_device);
 
-    printf("**** MEASURE DONE ****\n");
-
     memset(receiveBuf, 0, sizeof(uint8_t) * (DEFAULT_N_MEASUREMENTS + 1));
 
     /* Get measurements from slave device */
@@ -178,7 +177,6 @@ draw_screen_test(struct FbDev* fb_device) {
         printf("Failed to set measurement command, exit!\n");
         return;
     }
-    printf("*** RECEIVING ***\n");
 
     struct Measurement measurements[DEFAULT_N_MEASUREMENTS];
 
@@ -226,9 +224,31 @@ draw_screen_test(struct FbDev* fb_device) {
             }
         }
     };
-    printf("received measurement data\n");
 
-    /* Calculate average */
+    /* Write to file */
+    char fileName[128];
+    sprintf(fileName, "%s/%s_%d.txt", RESULT_OUTPUT_DIR, framebuf_state.displayName, testNumber);
+    FILE* file = fopen(fileName, "w");
+    if(file) {
+        // [ META DATA ]
+        // # Test: <testNumber>
+        // # Monitor: <framebuf_state.displayName>
+        // [ MEASUREMENT DATA ]
+        // tGesamt, tUmschalt
+        // ..., ...
+        // ...
+
+        /* Write meta header */
+        fprintf(file, "# Test: %d\n", testNumber);
+        fprintf(file, "# Monitor: %s\n", framebuf_state.displayName);
+
+        /* Write data labels */
+        fprintf(file, "tGesamt, tUmschalt\n");
+    } else {
+        printf("Could not open file %s, exit\n", fileName);
+        return;
+    }
+
     double tAvg, tAvgUmschalt;
     double tSum = 0;
     double tSumUmschalt = 0;
@@ -237,6 +257,7 @@ draw_screen_test(struct FbDev* fb_device) {
     uint32_t mBufUmschalt[DEFAULT_N_MEASUREMENTS - 4];
 
     for(uint32_t i = 0; i < DEFAULT_N_MEASUREMENTS; i++) {
+        /* Calculate average etc. */
         double tGesamt = (measurements[i].tWhite - measurements[i].tTrigger) - execTimes[i];
         uint32_t tGesamtDigit = measurements[i].tWhite - measurements[i].tTrigger;
         uint32_t tUmschalt = measurements[i].tWhite - measurements[i].tBlack;
@@ -247,9 +268,16 @@ draw_screen_test(struct FbDev* fb_device) {
 
             tSum += tGesamt;
             tSumUmschalt += tUmschalt;
+
+            /* Write actual data */
+            fprintf(file, "%f, %d\n", tGesamt, tUmschalt);
+
             n++;
         }
     }
+
+    /* Finished writing to data */
+    fclose(file);
 
     tAvg = tSum / n;
     tAvgUmschalt = tSumUmschalt / n;
@@ -259,10 +287,15 @@ draw_screen_test(struct FbDev* fb_device) {
     uint32_t medianUmschalt = median_u32(mBufUmschalt, DEFAULT_N_MEASUREMENTS - 4);
 
     /* Read min and max */
-    uint32_t minGesamt = mBufGesamt[0];
-    uint32_t maxGesamt = mBufGesamt[n];
-    uint32_t minUmschalt = mBufUmschalt[0];
-    uint32_t maxUmschalt = mBufUmschalt[n];
+    int minGesamt = mBufGesamt[0];
+    int maxGesamt = mBufGesamt[n];
+    int minUmschalt = mBufUmschalt[0];
+    int maxUmschalt = mBufUmschalt[n];
+
+    if(minGesamt < 0) minGesamt = 0;
+    if(maxGesamt < 0) maxGesamt = 0;
+    if(minUmschalt < 0) minUmschalt = 0;
+    if(maxUmschalt < 0) maxUmschalt = 0;
 
     /* Turn off start switch LED */
     gpioWrite(GPIO_EXT_START_LED, 0);
@@ -270,7 +303,7 @@ draw_screen_test(struct FbDev* fb_device) {
     while(framebuf_state.mode == FBMODE_TEST) {
 
         if(!m_failed_test) {
-            fb_draw_rect(fb_device, 0, 0, w / 2, h / 2, COLOR_WHITE, DRAW_CENTER_HORIZONTAL);
+            fb_draw_rect(fb_device, 0, 0, w / 2, 300, COLOR_WHITE, DRAW_CENTER_HORIZONTAL);
 
             fb_draw_rect(fb_device, 0, 0, w / 2, 100, COLOR_GREEN, DRAW_CENTER_HORIZONTAL);
             char m_complete_info[100];
@@ -287,19 +320,19 @@ draw_screen_test(struct FbDev* fb_device) {
             fb_draw_text(fb_device, str_dataAvgUmschalt, 0, 150, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
 
             char str_dataMedianGesamt[50];
-            sprintf(str_dataMedianGesamt, "Median total lag: %d ms", medianGesamt);
+            sprintf(str_dataMedianGesamt, "Median total lag: %u ms", medianGesamt);
             fb_draw_text(fb_device, str_dataMedianGesamt, 0, 180, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
 
             char str_dataMedianUmschalt[50];
-            sprintf(str_dataMedianUmschalt, "Median switching times: %d ms", medianUmschalt);
+            sprintf(str_dataMedianUmschalt, "Median switching times: %u ms", medianUmschalt);
             fb_draw_text(fb_device, str_dataMedianUmschalt, 0, 210, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
 
             char str_dataMinMaxGesamt[50];
-            sprintf(str_dataMinMaxGesamt, "Min total lag: %d ms | Max total lag: %d ms", minGesamt, maxGesamt);
+            sprintf(str_dataMinMaxGesamt, "Min total lag: %u ms | Max total lag: %u ms", minGesamt, maxGesamt);
             fb_draw_text(fb_device, str_dataMinMaxGesamt, 0, 240, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
 
             char str_dataMinMaxUmschalt[50];
-            sprintf(str_dataMinMaxUmschalt, "Min switching: %d ms | Max switching: %d ms", minUmschalt, maxUmschalt);
+            sprintf(str_dataMinMaxUmschalt, "Min switching: %u ms | Max switching: %u ms", minUmschalt, maxUmschalt);
             fb_draw_text(fb_device, str_dataMinMaxUmschalt, 0, 270, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
         } else {
             fb_draw_rect(fb_device, 0, 0, w / 2, 200, COLOR_WHITE, DRAW_CENTER_HORIZONTAL);
@@ -311,7 +344,6 @@ draw_screen_test(struct FbDev* fb_device) {
 
         /* Update buffers */
         fb_update(fb_device);
-        usleep(10000 / 60);
     }
 }
 
@@ -430,7 +462,6 @@ menu_rot_changed(ROT_STATE state) {
         }
     } else {
         /* counter clockwise */
-        printf("******** COUNTER CLOCK ********\n");
         switch(framebuf_state.mode) {
             case FBMODE_HOME:
                 /* Decrease test number */
