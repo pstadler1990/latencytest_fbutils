@@ -48,10 +48,8 @@ menu_draw(struct FbDev* fb_device) {
 
 void*
 menu_poll(void* vargp) {
-    /* */
+    /* Threaded function to be polled */
     while(mainIsRunning) {
-
-        printf("thread\n");
 
         if(last_poll_time > 0) {
             last_poll_time--;
