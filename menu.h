@@ -19,7 +19,7 @@ typedef enum {
 void menu_switch_pressed(void);
 void calib_switch_pressed(void);
 void start_switch_pressed(void);
-void menu_poll(void);
+void* menu_poll(void* vargp);
 void menu_draw(struct FbDev* fb_device);
 
 #endif //FB_MENU_H

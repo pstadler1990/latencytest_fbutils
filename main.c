@@ -7,6 +7,7 @@
 #include <time.h>
 #include "communication.h"
 #include <unistd.h>
+#include <pthread.h>
 #include "menu.h"
 
 struct FbDevState framebuf_state = {
@@ -16,6 +17,8 @@ struct FbDevState framebuf_state = {
         .isCalibrated = false,
 };
 int uart0_filestream = -1;
+
+bool mainIsRunning = true;
 
 int
 main() {
@@ -45,7 +48,10 @@ main() {
             printf("Display name successfully received: %s\n", framebuf_state.displayName);
         }
 
-        while(1) {
+        pthread_t thread_id;
+        pthread_create(&thread_id, NULL, menu_poll, NULL);
+
+        while(mainIsRunning) {
             switch(framebuf_state.mode) {
                 case FBMODE_HOME:
                 default:
@@ -61,6 +67,8 @@ main() {
         }
 
         //draw_screen_alternating(&framebuf_device);
+
+        pthread_join(thread_id, NULL);
 
         close(uart0_filestream);
         fb_close(&framebuf_device);

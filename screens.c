@@ -14,8 +14,11 @@
 #include <stdlib.h>
 #include "communication.h"
 #include "calculations.h"
+#include "menu.h"
 
 extern struct FbDevState framebuf_state;
+
+static uint32_t testNumber = 0;
 
 void
 draw_screen_home(struct FbDev* fb_device) {
@@ -47,11 +50,13 @@ draw_screen_home(struct FbDev* fb_device) {
     sprintf(bpp_info_str, "Color depth: %d", fb_device->bpp);
     sprintf(display_name_str, "Display name: %s", framebuf_state.displayName);
 
+    uint32_t tCounter = 0;
     /* Drawing idle / welcome screen
        This screen can only be exit on external triggers
        - START button fires next state: FBSTATE_TRIGGERED
        - Rotary encoder (navigation) changes settings */
     while(framebuf_state.mode == FBMODE_HOME) {
+
         fb_draw_rect(fb_device, xx, yy, 100, 100, bb_colors[bb_color_index], DRAW_CENTER_NONE);
 
         fb_draw_line(fb_device, 0, 0, w, h, COLOR_WHITE);
@@ -74,6 +79,11 @@ draw_screen_home(struct FbDev* fb_device) {
             fb_draw_text(fb_device, "- Ready! Press START to begin measurements -", 0, 80, COLOR_BLUE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
         }
 
+        char test_number_str[50];
+        sprintf(test_number_str, "Test number: %d", testNumber);
+        fb_draw_rect(fb_device, 0, 120, w, 20, COLOR_RED, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+        fb_draw_text(fb_device, test_number_str, 0, 120, COLOR_BLACK, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+
         /* Bouncing rect animation */
         yy += ys;
         xx += xs;
@@ -91,7 +101,6 @@ draw_screen_home(struct FbDev* fb_device) {
 
         /* Update buffers */
         fb_update(fb_device);
-        usleep(100000 / 60);
     }
 }
 
@@ -403,5 +412,37 @@ draw_screen_alternating(struct FbDev* fb_device) {
         fb_draw_filled_screen(fb_device, COLOR_WHITE);
         fb_update(fb_device);
         sleep(2);
+    }
+}
+
+void
+menu_rot_changed(ROT_STATE state) {
+    /* */
+    if(state == ROTSTATE_CLOCKWISE) {
+        /* clockwise */
+        switch(framebuf_state.mode) {
+            case FBMODE_HOME:
+                /* Increase test number */
+                testNumber++;
+                break;
+            default:
+                break;
+        }
+    } else {
+        /* counter clockwise */
+        printf("******** COUNTER CLOCK ********\n");
+        switch(framebuf_state.mode) {
+            case FBMODE_HOME:
+                /* Decrease test number */
+                if(testNumber == 0) {
+                    testNumber = 0;
+                } else {
+                    testNumber--;
+                }
+                break;
+            default:
+                break;
+        }
+
     }
 }
