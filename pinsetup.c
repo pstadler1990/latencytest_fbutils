@@ -29,14 +29,6 @@ init_GPIOs(void) {
     gpioSetMode(GPIO_EXT_TRIGGER_OUT, PI_OUTPUT);
     gpioSetPullUpDown(GPIO_EXT_TRIGGER_OUT, PI_PUD_OFF);
 
-    /* OUT MODE_ADC */
-    gpioSetMode(GPIO_EXT_MODE_ADC_OUT, PI_OUTPUT);
-    gpioSetPullUpDown(GPIO_EXT_MODE_ADC_OUT, PI_PUD_UP);
-
-    /* OUT MODE_DIGITAL */
-    gpioSetMode(GPIO_EXT_MODE_DIGITAL_OUT, PI_OUTPUT);
-    gpioSetPullUpDown(GPIO_EXT_MODE_DIGITAL_OUT, PI_PUD_UP);
-
     /* Rotary encoder A, IN digital */
     gpioSetMode(GPIO_INT_ROT_A, PI_INPUT);
     gpioSetPullUpDown(GPIO_INT_ROT_A, PI_PUD_UP);
