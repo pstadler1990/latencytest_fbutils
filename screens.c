@@ -108,7 +108,7 @@ draw_screen_home(struct FbDev* fb_device) {
 void
 draw_screen_test(struct FbDev* fb_device) {
 
-#define BUF_SIZE ((uint32_t)100)
+#define BUF_SIZE ((uint32_t)DEFAULT_N_MEASUREMENTS * 2)
 
     // TODO: Add check for isCalibrated -> if not: show message and return to home!
 
@@ -144,9 +144,9 @@ draw_screen_test(struct FbDev* fb_device) {
         srand(time(0));
         usleep(((rand() % 500) + 1000) * 1000);
 
-        //fb_draw_filled_screen(fb_device, COLOR_WHITE);
-        fb_draw_rect(fb_device, 0, 0, 150, 150, COLOR_WHITE, DRAW_CENTER_NONE);
-        fb_draw_rect(fb_device, w - 150, h - 150, 150, 150, COLOR_WHITE, DRAW_CENTER_NONE);
+        fb_draw_filled_screen(fb_device, COLOR_WHITE);
+        //fb_draw_rect(fb_device, 0, 0, 150, 150, COLOR_WHITE, DRAW_CENTER_NONE);
+        //fb_draw_rect(fb_device, w - 150, h - 150, 150, 150, COLOR_WHITE, DRAW_CENTER_NONE);
 
         /*  Send TRIGGER to STM8 */
         gpioWrite(GPIO_EXT_TRIGGER_OUT, 1);
@@ -234,16 +234,12 @@ draw_screen_test(struct FbDev* fb_device) {
         // # Test: <testNumber>
         // # Monitor: <framebuf_state.displayName>
         // [ MEASUREMENT DATA ]
-        // tGesamt, tUmschalt
+        // Timestamp, Test#, Device name, tGesamt, tUmschalt
         // ..., ...
         // ...
 
-        /* Write meta header */
-        fprintf(file, "# Test: %d\n", testNumber);
-        fprintf(file, "# Monitor: %s\n", framebuf_state.displayName);
-
         /* Write data labels */
-        fprintf(file, "tGesamt, tUmschalt\n");
+        fprintf(file, "Timestamp, Test#, Device name, tGesamt, tUmschalt\n");
     } else {
         printf("Could not open file %s, exit\n", fileName);
         return;
@@ -269,8 +265,8 @@ draw_screen_test(struct FbDev* fb_device) {
             tSum += tGesamt;
             tSumUmschalt += tUmschalt;
 
-            /* Write actual data */
-            fprintf(file, "%f, %d\n", tGesamt, tUmschalt);
+            /* Write meta headers and actual data */
+            fprintf(file, "%d, %d, %s, %f, %d\n", (int)time(NULL), testNumber, framebuf_state.displayName, tGesamt, tUmschalt);
 
             n++;
         }
@@ -351,7 +347,6 @@ void
 draw_screen_calib_bw_digits(struct FbDev* fb_device) {
     /* Black and white digits calibration screen */
     uint32_t w = fb_device->w;
-    uint32_t h = fb_device->h;
 
     framebuf_state.isCalibrated = false;
 
@@ -369,6 +364,8 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
 
     framebuf_state.state = FBSTATE_READY;
 
+    printf("vor while schleife\n");
+
     /* STM8 is in calibration mode */
     while(1) {
         /* Show black screen */
@@ -376,16 +373,22 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
         fb_update(fb_device);
         sleep(1);
 
+        printf("vor calib black\n");
+
         if(!uart_send_command(CTRL_CMD_CALIB_BLACK, false)) {
             m_failed_test = true;
             break;
         }
+
+        printf("warte auf black\n");
 
         /* Wait for device's response */
         if(!uart_receive_response(8, "BLACK OK", false)) {
             m_failed_test = true;
             break;
         }
+
+        printf("vor white\n");
 
         /* Show white screen */
         fb_draw_filled_screen(fb_device, COLOR_WHITE);
@@ -396,16 +399,18 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
             m_failed_test = true;
             break;
         }
+
+        printf("warte auf calib ok\n");
+
         if(!uart_receive_response(8, "CALIB OK", false)) {
             m_failed_test = true;
         }
 
         bool is_receiving = true;
-        int receiveStatus = -1;
         bool has_package = false;
         uint32_t lastReceivedTimeout = MEASUREMENT_TIMEOUT;
         int m_index = 0;
-        char receiveBuf[30];
+        char receiveBuf[100];
 
         while(is_receiving) {
 
@@ -413,7 +418,7 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
                 is_receiving = false;
             }
 
-            receiveStatus = uart_receive(receiveBuf, BUF_SIZE);
+            int receiveStatus = uart_receive(receiveBuf, BUF_SIZE);
 
             if(receiveStatus != -1) {
 

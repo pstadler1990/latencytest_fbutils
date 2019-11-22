@@ -66,8 +66,6 @@ main() {
             }
         }
 
-        //draw_screen_alternating(&framebuf_device);
-
         pthread_join(thread_id, NULL);
 
         close(uart0_filestream);
