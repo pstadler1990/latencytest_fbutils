@@ -23,7 +23,7 @@ init_uart(const char* uartIdentifier) {
 
     struct termios options;
     tcgetattr(uart0_filestream, &options);
-    options.c_cflag = B9600 | CS8 | CLOCAL | CREAD;
+    options.c_cflag = B115200 | CS8 | CLOCAL | CREAD;
     options.c_iflag = IGNPAR;
     options.c_oflag = 0;
     options.c_lflag |= ICANON;
