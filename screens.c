@@ -365,6 +365,8 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
     gpioWrite(GPIO_EXT_START_LED, 0);
 
     bool m_failed_test = false;
+    uint32_t lowerThreshold = 0, upperThreshold = 0;
+
     framebuf_state.state = FBSTATE_READY;
 
     /* STM8 is in calibration mode */
@@ -397,6 +399,47 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
         if(!uart_receive_response(8, "CALIB OK", false)) {
             m_failed_test = true;
         }
+
+        bool is_receiving = true;
+        int receiveStatus = -1;
+        bool has_package = false;
+        uint32_t lastReceivedTimeout = MEASUREMENT_TIMEOUT;
+        int m_index = 0;
+        char receiveBuf[30];
+
+        while(is_receiving) {
+
+            if(--lastReceivedTimeout == 0) {
+                is_receiving = false;
+            }
+
+            receiveStatus = uart_receive(receiveBuf, BUF_SIZE);
+
+            if(receiveStatus != -1) {
+
+                lastReceivedTimeout = MEASUREMENT_TIMEOUT;
+
+                if(strncmp("{", receiveBuf, 1) == 0) {
+                    /* Begin of new calibration value package */
+                    has_package = true;
+                } else if(strncmp("}", receiveBuf, 1) == 0) {
+                    /* End of measurement package */
+                    is_receiving = false;
+                } else {
+                    /* Should be measurement data */
+                    if(has_package) {
+                        uint32_t num = (uint32_t) strtoll(receiveBuf, NULL, 10);
+                        if(m_index == 0) {
+                            lowerThreshold = num;
+                            m_index = 1;
+                        } else {
+                            upperThreshold = num;
+                        }
+                    }
+                }
+            }
+        }
+
         break;
     }
 
@@ -416,7 +459,10 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
             fb_draw_rect(fb_device, 0, 0, w / 2, 200, COLOR_WHITE, DRAW_CENTER_HORIZONTAL);
             fb_draw_rect(fb_device, 0, 0, w / 2, 100, COLOR_GREEN, DRAW_CENTER_HORIZONTAL);
             fb_draw_text(fb_device, "Calibration successful!", 0, 40, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
-            fb_draw_text(fb_device, "The device has been successfully calibrated!", 0, 140, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+
+            char str_dataLowerUpperThreshold[50];
+            sprintf(str_dataLowerUpperThreshold, "Black: %d, White: %d", upperThreshold, lowerThreshold);
+            fb_draw_text(fb_device, str_dataLowerUpperThreshold, 0, 140, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
 
         } else {
             fb_draw_rect(fb_device, 0, 0, w / 2, 200, COLOR_WHITE, DRAW_CENTER_HORIZONTAL);
