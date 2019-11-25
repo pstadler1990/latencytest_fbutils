@@ -5,12 +5,16 @@
 #ifndef FB_CONFIGURATION_H
 #define FB_CONFIGURATION_H
 
-#define DEFAULT_N_MEASUREMENTS      ((uint32_t)20)        /* Number of single measurements per series */
-#define MAX_FAILED_MEASUREMENTS     ((uint32_t)10)         /* Maximum number of failed measurements within a single test */
-#define MEASUREMENT_TIMEOUT         ((uint32_t)1000000)    /* Maximum timeout */
+#define STM8_MAX_MEASUREMENTS       ((uint32_t)40)
+
+#define DEFAULT_N_MEASUREMENTS      ((uint32_t)STM8_MAX_MEASUREMENTS)        /* Number of single measurements per series */
+#define MAX_FAILED_MEASUREMENTS     ((uint32_t)10)                          /* Maximum number of failed measurements within a single test */
+#define MEASUREMENT_TIMEOUT         ((uint32_t)1000000)                     /* Maximum timeout */
 #define ROT_DEBOUNCE_TIME           ((uint32_t)100)
 
 #define EDID_MAX_DISPLAY_NAME       ((uint32_t)64)
+
+#define N_CHANNELS                  ((uint32_t)3)
 
 #define RESULT_OUTPUT_DIR           "results"
 

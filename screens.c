@@ -110,8 +110,6 @@ draw_screen_test(struct FbDev* fb_device) {
 
 #define BUF_SIZE ((uint32_t)DEFAULT_N_MEASUREMENTS * 2)
 
-    // TODO: Add check for isCalibrated -> if not: show message and return to home!
-
     uint32_t w = fb_device->w;
     uint32_t h = fb_device->h;
     char receiveBuf[BUF_SIZE];
@@ -178,14 +176,16 @@ draw_screen_test(struct FbDev* fb_device) {
         return;
     }
 
-    struct Measurement measurements[DEFAULT_N_MEASUREMENTS];
+    struct Measurement measurements[N_CHANNELS][DEFAULT_N_MEASUREMENTS];
 
     bool is_receiving = true;
     int receiveStatus = -1;
     uint32_t receivePtr = 0;
+    uint32_t channelPtr = 0;
     bool has_package = false;
     uint32_t measurementTmpBuf[3];
     uint32_t m_index = 0;
+    uint32_t p_index = 0;
     uint32_t lastReceivedTimeout = MEASUREMENT_TIMEOUT;
 
     while(is_receiving) {
@@ -199,6 +199,7 @@ draw_screen_test(struct FbDev* fb_device) {
 
             lastReceivedTimeout = MEASUREMENT_TIMEOUT;
 
+            // { t1, b1, w1, t2, b2, w2, t3, b3, w3}, ... { ... } for N = all measurements
             if(strncmp("{", receiveBuf, 1) == 0) {
                 /* Begin of new measurement package */
                 has_package = true;
@@ -208,16 +209,29 @@ draw_screen_test(struct FbDev* fb_device) {
                 has_package = false;
             } else {
                 /* Should be measurement data */
-                if(has_package && m_index < 3) {
+                if(has_package && m_index < (3 * N_CHANNELS)) {
                     uint32_t num = (uint32_t) strtoll(receiveBuf, NULL, 10);
-                    measurementTmpBuf[m_index] = num;
-                    if(m_index + 1 < 3) {
+
+                    if(p_index == 0) {
+                        measurements[channelPtr][receivePtr].tTrigger = num;
+                        p_index = 1;
+                    } else if(p_index == 1) {
+                        measurements[channelPtr][receivePtr].tBlack = num;
+                        p_index = 2;
+                    } else {
+                        measurements[channelPtr][receivePtr].tWhite = num;
+                        p_index = 0;
+
+                        if(channelPtr + 1 < N_CHANNELS) {
+                            channelPtr++;
+                        } else {
+                            channelPtr = 0;
+                        }
+                    }
+
+                    if(m_index + 1 < (3 * N_CHANNELS)) {
                         m_index++;
                     } else {
-                        /* Received three values */
-                        measurements[receivePtr].tTrigger = measurementTmpBuf[0];
-                        measurements[receivePtr].tBlack = measurementTmpBuf[1];
-                        measurements[receivePtr].tWhite = measurementTmpBuf[2];
                         m_index = 0;
                     }
                 }
@@ -239,7 +253,12 @@ draw_screen_test(struct FbDev* fb_device) {
         // ...
 
         /* Write data labels */
-        fprintf(file, "Timestamp, Test#, Device name, tGesamt, tUmschalt\n");
+        fprintf(file, "Timestamp, Test#, Device name, tGesamt, tUmschalt, ");
+
+        for(uint32_t c = 0; c < N_CHANNELS; c++) {
+            fprintf(file, "Sensor %d, ", c);
+        }
+
     } else {
         printf("Could not open file %s, exit\n", fileName);
         return;
@@ -249,26 +268,34 @@ draw_screen_test(struct FbDev* fb_device) {
     double tSum = 0;
     double tSumUmschalt = 0;
     uint32_t n = 0;
-    uint32_t mBufGesamt[DEFAULT_N_MEASUREMENTS - 4];
-    uint32_t mBufUmschalt[DEFAULT_N_MEASUREMENTS - 4];
+    uint32_t mBufGesamt[N_CHANNELS][DEFAULT_N_MEASUREMENTS - 4];
+    uint32_t mBufUmschalt[N_CHANNELS][DEFAULT_N_MEASUREMENTS - 4];
 
     for(uint32_t i = 0; i < DEFAULT_N_MEASUREMENTS; i++) {
         /* Calculate average etc. */
-        double tGesamt = (measurements[i].tWhite - measurements[i].tTrigger) - execTimes[i];
-        uint32_t tGesamtDigit = measurements[i].tWhite - measurements[i].tTrigger;
-        uint32_t tUmschalt = measurements[i].tWhite - measurements[i].tBlack;
+        double tGesamt[N_CHANNELS];
+        uint32_t tGesamtDigit[N_CHANNELS];
+        uint32_t tUmschalt[N_CHANNELS];
 
-        if(i > 1 && i < DEFAULT_N_MEASUREMENTS - 2) {
-            mBufGesamt[i] = tGesamtDigit;
-            mBufUmschalt[i] = tUmschalt;
+        /* Write meta headers and actual data */
+        fprintf(file, "%d, %d, %s, ", (int)time(NULL), testNumber, framebuf_state.displayName);
 
-            tSum += tGesamt;
-            tSumUmschalt += tUmschalt;
+        for(uint32_t c = 0; c < N_CHANNELS; c++) {
+            tGesamt[c] = (measurements[c][i].tWhite - measurements[c][i].tTrigger) - execTimes[i];
+            tGesamtDigit[c] = measurements[c][i].tWhite - measurements[c][i].tTrigger;
+            tUmschalt[c] = measurements[c][i].tWhite - measurements[c][i].tBlack;
 
-            /* Write meta headers and actual data */
-            fprintf(file, "%d, %d, %s, %f, %d\n", (int)time(NULL), testNumber, framebuf_state.displayName, tGesamt, tUmschalt);
+            if(i > 1 && i < DEFAULT_N_MEASUREMENTS - 2) {
+                mBufGesamt[c][i] = tGesamtDigit[c];
+                mBufUmschalt[c][i] = tUmschalt[c];
 
-            n++;
+                tSum += tGesamt[c];
+                tSumUmschalt += tUmschalt[c];
+
+                fprintf(file, "%f, %d, ", tGesamt[c], tUmschalt[c]);
+
+                n++;
+            }
         }
     }
 
@@ -279,19 +306,34 @@ draw_screen_test(struct FbDev* fb_device) {
     tAvgUmschalt = tSumUmschalt / n;
 
     /* Calculate median */
-    uint32_t medianGesamt = median_u32(mBufGesamt, DEFAULT_N_MEASUREMENTS - 4);
-    uint32_t medianUmschalt = median_u32(mBufUmschalt, DEFAULT_N_MEASUREMENTS - 4);
+    uint32_t medianGesamt[N_CHANNELS];
+    uint32_t medianUmschalt[N_CHANNELS];
+
+    uint32_t medianGesamtAvg, medianGesamtSum = 0;
+    uint32_t medianUmschaltAvg, medianUmschaltSum = 0;
+
+    for(uint32_t c = 0; c < N_CHANNELS; c++) {
+        medianGesamt[c] = median_u32(mBufGesamt[c], DEFAULT_N_MEASUREMENTS - 4);
+        medianUmschalt[c] = median_u32(mBufUmschalt[c], DEFAULT_N_MEASUREMENTS - 4);
+
+        medianGesamtSum += medianGesamt[c];
+        medianUmschaltSum += medianUmschalt[c];
+    }
+    medianGesamtAvg = medianGesamtSum / N_CHANNELS;
+    medianUmschaltAvg = medianUmschaltSum / N_CHANNELS;
 
     /* Read min and max */
-    int minGesamt = mBufGesamt[0];
-    int maxGesamt = mBufGesamt[n];
-    int minUmschalt = mBufUmschalt[0];
-    int maxUmschalt = mBufUmschalt[n];
+    int minGesamt[N_CHANNELS];
+    int maxGesamt[N_CHANNELS];
+    int minUmschalt[N_CHANNELS];
+    int maxUmschalt[N_CHANNELS];
 
-    if(minGesamt < 0) minGesamt = 0;
-    if(maxGesamt < 0) maxGesamt = 0;
-    if(minUmschalt < 0) minUmschalt = 0;
-    if(maxUmschalt < 0) maxUmschalt = 0;
+    for(uint32_t c = 0; c < N_CHANNELS; c++) {
+        minGesamt[c] = mBufGesamt[c][0];
+        maxGesamt[c] = mBufGesamt[c][n];
+        minUmschalt[c] = mBufUmschalt[c][0];
+        maxUmschalt[c] = mBufUmschalt[c][n];
+    }
 
     /* Turn off start switch LED */
     gpioWrite(GPIO_EXT_START_LED, 0);
@@ -315,21 +357,28 @@ draw_screen_test(struct FbDev* fb_device) {
             sprintf(str_dataAvgUmschalt, "Average switching times: %f ms", tAvgUmschalt);
             fb_draw_text(fb_device, str_dataAvgUmschalt, 0, 150, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
 
-            char str_dataMedianGesamt[50];
-            sprintf(str_dataMedianGesamt, "Median total lag: %u ms", medianGesamt);
-            fb_draw_text(fb_device, str_dataMedianGesamt, 0, 180, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+            // Channels
+            for(uint32_t c = 0; c < N_CHANNELS; c++) {
+                char str_dataMedianGesamt[100];
+                sprintf(str_dataMedianGesamt, "Median total lag: %u ms (sensor %d)", medianGesamt[c], c);
+                fb_draw_text(fb_device, str_dataMedianGesamt, 0, 180 + (c * 20), COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+            }
 
-            char str_dataMedianUmschalt[50];
-            sprintf(str_dataMedianUmschalt, "Median switching times: %u ms", medianUmschalt);
-            fb_draw_text(fb_device, str_dataMedianUmschalt, 0, 210, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+            for(uint32_t c = 0; c < N_CHANNELS; c++) {
+                char str_dataMedianUmschalt[100];
+                sprintf(str_dataMedianUmschalt, "Median switching times: %u ms (sensor %d)", medianUmschalt[c], c);
+                fb_draw_text(fb_device, str_dataMedianUmschalt, 0, 210 + (c * 20), COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+            }
 
-            char str_dataMinMaxGesamt[50];
-            sprintf(str_dataMinMaxGesamt, "Min total lag: %u ms | Max total lag: %u ms", minGesamt, maxGesamt);
-            fb_draw_text(fb_device, str_dataMinMaxGesamt, 0, 240, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+            for(uint32_t c = 0; c < N_CHANNELS; c++) {
+                char str_dataMinMaxGesamt[100];
+                sprintf(str_dataMinMaxGesamt, "Min total lag: %u ms | Max total lag: %u ms (sensor %d)", minGesamt[c], maxGesamt[c], c);
+                fb_draw_text(fb_device, str_dataMinMaxGesamt, 0, 240 + (c* 20), COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+            }
 
-            char str_dataMinMaxUmschalt[50];
-            sprintf(str_dataMinMaxUmschalt, "Min switching: %u ms | Max switching: %u ms", minUmschalt, maxUmschalt);
-            fb_draw_text(fb_device, str_dataMinMaxUmschalt, 0, 270, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+//            char str_dataMinMaxUmschalt[50];
+//            sprintf(str_dataMinMaxUmschalt, "Min switching: %u ms | Max switching: %u ms", minUmschalt, maxUmschalt);
+//            fb_draw_text(fb_device, str_dataMinMaxUmschalt, 0, 270, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
         } else {
             fb_draw_rect(fb_device, 0, 0, w / 2, 200, COLOR_WHITE, DRAW_CENTER_HORIZONTAL);
             fb_draw_text(fb_device, "- Press START to retry -", 0, 145, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
@@ -360,11 +409,10 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
     gpioWrite(GPIO_EXT_START_LED, 0);
 
     bool m_failed_test = false;
-    uint32_t lowerThreshold = 0, upperThreshold = 0;
+    uint32_t lowerThreshold[N_CHANNELS];
+    uint32_t upperThreshold[N_CHANNELS];
 
     framebuf_state.state = FBSTATE_READY;
-
-    printf("vor while schleife\n");
 
     /* STM8 is in calibration mode */
     while(1) {
@@ -373,22 +421,16 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
         fb_update(fb_device);
         sleep(1);
 
-        printf("vor calib black\n");
-
         if(!uart_send_command(CTRL_CMD_CALIB_BLACK, false)) {
             m_failed_test = true;
             break;
         }
-
-        printf("warte auf black\n");
 
         /* Wait for device's response */
         if(!uart_receive_response(8, "BLACK OK", false)) {
             m_failed_test = true;
             break;
         }
-
-        printf("vor white\n");
 
         /* Show white screen */
         fb_draw_filled_screen(fb_device, COLOR_WHITE);
@@ -400,30 +442,22 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
             break;
         }
 
-        printf("warte auf calib ok\n");
-
         if(!uart_receive_response(8, "CALIB OK", false)) {
             m_failed_test = true;
         }
 
         bool is_receiving = true;
         bool has_package = false;
-        uint32_t lastReceivedTimeout = MEASUREMENT_TIMEOUT;
-        int m_index = 0;
+        int m_index = 0;    // 0 < m_index < 3
+        int p_index = 0;    // 0 < p_index < 2
         char receiveBuf[100];
 
         while(is_receiving) {
 
-            if(--lastReceivedTimeout == 0) {
-                is_receiving = false;
-            }
-
             int receiveStatus = uart_receive(receiveBuf, BUF_SIZE);
-
             if(receiveStatus != -1) {
 
-                lastReceivedTimeout = MEASUREMENT_TIMEOUT;
-
+                // { b1, w1, b2, w2, b3, w3}
                 if(strncmp("{", receiveBuf, 1) == 0) {
                     /* Begin of new calibration value package */
                     has_package = true;
@@ -434,11 +468,16 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
                     /* Should be measurement data */
                     if(has_package) {
                         uint32_t num = (uint32_t) strtoll(receiveBuf, NULL, 10);
-                        if(m_index == 0) {
-                            lowerThreshold = num;
-                            m_index = 1;
+
+                        if(p_index == 0) {
+                            upperThreshold[m_index] = num;
+                            p_index = 1;
                         } else {
-                            upperThreshold = num;
+                            lowerThreshold[m_index] = num;
+                            if(m_index + 1 < N_CHANNELS) {
+                                m_index++;
+                            }
+                            p_index = 0;
                         }
                     }
                 }
@@ -465,9 +504,11 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
             fb_draw_rect(fb_device, 0, 0, w / 2, 100, COLOR_GREEN, DRAW_CENTER_HORIZONTAL);
             fb_draw_text(fb_device, "Calibration successful!", 0, 40, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
 
-            char str_dataLowerUpperThreshold[50];
-            sprintf(str_dataLowerUpperThreshold, "Black: %d, White: %d", upperThreshold, lowerThreshold);
-            fb_draw_text(fb_device, str_dataLowerUpperThreshold, 0, 140, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+            for(uint32_t c = 0; c < N_CHANNELS; c++) {
+                char str_dataLowerUpperThreshold[50];
+                sprintf(str_dataLowerUpperThreshold, "Black: %d, White: %d", upperThreshold[c], lowerThreshold[c]);
+                fb_draw_text(fb_device, str_dataLowerUpperThreshold, 0, 140 + (c * 20), COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+            }
 
         } else {
             fb_draw_rect(fb_device, 0, 0, w / 2, 200, COLOR_WHITE, DRAW_CENTER_HORIZONTAL);
