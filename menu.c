@@ -14,6 +14,7 @@
 extern struct FbDevState framebuf_state;
 extern bool mainIsRunning;
 extern bool usbDriveInserted;
+extern bool usbDriveCopied;
 
 static int last_state_a = 0;
 static unsigned int last_poll_time = ROT_DEBOUNCE_TIME;
@@ -78,15 +79,12 @@ usbdrive_poll(void* vargp) {
 
         if(framebuf_state.mode == FBMODE_HOME) {
 
-            FILE *f_mount = popen("mount /dev/sda1 /media/usb/", "r");
+            FILE *f_mount = popen("mount /dev/sda1 /media/usb/ 2>&1", "r");
             pclose(f_mount);
 
-            FILE *f = popen("mount | grep /dev/sda1", "r");
-            if (NULL != f) {
-
-                if (EOF != fgetc(f)) {
-                    puts("/dev/sda1 is mounted");
-
+            FILE *f = popen("mount | grep /dev/sda1 2>&1", "r");
+            if (f != NULL) {
+                if (fgetc(f) != EOF) {
                     /* As soon as the drive is inserted and mounted, copy
                       all result files from the result dir onto the drive
                       (in home screen only!) */
@@ -94,7 +92,7 @@ usbdrive_poll(void* vargp) {
 
                     usb_copy_files();
 
-                    sleep(2);   // Needed for better UI visibility
+		    sleep(10); 	// Give some time to remove the drive again
 
                     /* umount drive again */
                     FILE *f_umount = popen("umount /media/usb/", "r");
@@ -114,8 +112,10 @@ usbdrive_poll(void* vargp) {
 static void
 usb_copy_files(void) {
     /* Copies all .csv files from the results dir onto the mounted usb drive */
+    usbDriveCopied = false;
     char dir[100];
-    sprintf(dir, "cp -r %s/*.csv /media/usb/", RESULT_OUTPUT_DIR);
-    FILE *f_mount = popen(dir, "r");
-    pclose(f_mount);
+    sprintf(dir, "cp %s/*.csv /media/usb/ 2>&1", RESULT_OUTPUT_DIR);
+    FILE *f = popen(dir, "r");
+    pclose(f);
+    usbDriveCopied = true;
 }

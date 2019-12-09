@@ -18,6 +18,7 @@
 
 extern struct FbDevState framebuf_state;
 extern bool usbDriveInserted;
+extern bool usbDriveCopied;
 
 static uint32_t testNumber = 0;
 
@@ -88,11 +89,14 @@ draw_screen_home(struct FbDev* fb_device) {
 
         /* USB drive copy dialog */
         if(usbDriveInserted) {
-            fb_draw_rect(fb_device, -10, -10, (w / 2) + 10, 110, COLOR_WHITE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+            fb_draw_rect(fb_device, 0, 0, (w / 2) + 20, 120, COLOR_MAGENTA, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
             fb_draw_rect(fb_device, 0, 0, w / 2, 100, COLOR_WHITE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
-
-            fb_draw_text(fb_device, "USB drive found.. Copying files..", 0, 100, COLOR_BLACK, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
-        }
+	    if(!usbDriveCopied) {
+		fb_draw_text(fb_device, "USB drive found.. Copying files..", 0, 0, COLOR_BLACK, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+            } else {
+		fb_draw_text(fb_device, "Copied files to USB drive!", 0, 0, COLOR_BLUE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+	    }
+   	}
 
         /* Bouncing rect animation */
         yy += ys;

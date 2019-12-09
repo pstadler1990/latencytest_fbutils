@@ -20,6 +20,7 @@ int uart0_filestream = -1;
 
 bool mainIsRunning = true;
 bool usbDriveInserted = false;
+bool usbDriveCopied = false;
 
 int
 main() {
