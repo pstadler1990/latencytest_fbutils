@@ -17,6 +17,7 @@
 #include "menu.h"
 
 extern struct FbDevState framebuf_state;
+extern bool usbDriveInserted;
 
 static uint32_t testNumber = 0;
 
@@ -84,6 +85,14 @@ draw_screen_home(struct FbDev* fb_device) {
         sprintf(test_number_str, "Test number: %d", testNumber);
         fb_draw_rect(fb_device, 0, 100, w / 2, 20, COLOR_BLACK, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
         fb_draw_text(fb_device, test_number_str, 0, 100, COLOR_WHITE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+
+        /* USB drive copy dialog */
+        if(usbDriveInserted) {
+            fb_draw_rect(fb_device, -10, -10, (w / 2) + 10, 110, COLOR_WHITE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+            fb_draw_rect(fb_device, 0, 0, w / 2, 100, COLOR_WHITE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+
+            fb_draw_text(fb_device, "USB drive found.. Copying files..", 0, 100, COLOR_BLACK, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+        }
 
         /* Bouncing rect animation */
         yy += ys;
@@ -227,7 +236,7 @@ draw_screen_test(struct FbDev* fb_device) {
 
     /* Write to file */
     char fileName[128];
-    sprintf(fileName, "%s/%s_%d.txt", RESULT_OUTPUT_DIR, framebuf_state.displayName, testNumber);
+    sprintf(fileName, "%s/%s_%d.csv", RESULT_OUTPUT_DIR, framebuf_state.displayName, testNumber);
     FILE* file = fopen(fileName, "w");
     if(file) {
         // [ META DATA ]
@@ -364,8 +373,6 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
 
     framebuf_state.state = FBSTATE_READY;
 
-    printf("vor while schleife\n");
-
     /* STM8 is in calibration mode */
     while(1) {
         /* Show black screen */
@@ -373,22 +380,16 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
         fb_update(fb_device);
         sleep(1);
 
-        printf("vor calib black\n");
-
         if(!uart_send_command(CTRL_CMD_CALIB_BLACK, false)) {
             m_failed_test = true;
             break;
         }
-
-        printf("warte auf black\n");
 
         /* Wait for device's response */
         if(!uart_receive_response(8, "BLACK OK", false)) {
             m_failed_test = true;
             break;
         }
-
-        printf("vor white\n");
 
         /* Show white screen */
         fb_draw_filled_screen(fb_device, COLOR_WHITE);
@@ -399,8 +400,6 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
             m_failed_test = true;
             break;
         }
-
-        printf("warte auf calib ok\n");
 
         if(!uart_receive_response(8, "CALIB OK", false)) {
             m_failed_test = true;

@@ -19,6 +19,7 @@ struct FbDevState framebuf_state = {
 int uart0_filestream = -1;
 
 bool mainIsRunning = true;
+bool usbDriveInserted = false;
 
 int
 main() {
@@ -48,8 +49,11 @@ main() {
             printf("Display name successfully received: %s\n", framebuf_state.displayName);
         }
 
-        pthread_t thread_id;
-        pthread_create(&thread_id, NULL, menu_poll, NULL);
+        pthread_t thread_menu;
+        pthread_create(&thread_menu, NULL, menu_poll, NULL);
+
+        pthread_t thread_usb;
+        pthread_create(&thread_usb, NULL, usbdrive_poll, NULL);
 
         while(mainIsRunning) {
             switch(framebuf_state.mode) {
@@ -66,7 +70,8 @@ main() {
             }
         }
 
-        pthread_join(thread_id, NULL);
+        pthread_join(thread_menu, NULL);
+        pthread_join(thread_usb, NULL);
 
         close(uart0_filestream);
         fb_close(&framebuf_device);
