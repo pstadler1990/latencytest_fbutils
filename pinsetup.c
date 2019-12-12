@@ -14,7 +14,6 @@ static void _rot_switch_isr(int gpio, int level, uint32_t tick);
 static void _calib_switch_isr(int gpio, int level, uint32_t tick);
 static void _start_switch_isr(int gpio, int level, uint32_t tick);
 
-
 int8_t
 init_GPIOs(void) {
     /* */

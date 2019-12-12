@@ -10,6 +10,7 @@
 #include "main.h"
 #include "screens.h"
 #include <unistd.h>
+#include <stdlib.h>
 
 extern struct FbDevState framebuf_state;
 extern bool mainIsRunning;
@@ -18,12 +19,14 @@ extern bool usbDriveCopied;
 
 static int last_state_a = 0;
 static unsigned int last_poll_time = ROT_DEBOUNCE_TIME;
+static int homeSwitchPressedTime = 0;
 
 static void usb_copy_files(void);
 
 void
 menu_switch_pressed(void) {
     /* */
+    homeSwitchPressedTime = 0;
     framebuf_state.mode = FBMODE_HOME;
     framebuf_state.state = FBSTATE_IDLE;
 }
@@ -45,10 +48,23 @@ start_switch_pressed(void) {
     framebuf_state.state = FBSTATE_INITIALIZE;
 }
 
+void
+shutdown_switch_pressed(void) {
+    /* Perform device shutdown */
+    system("shutdown now");
+}
+
 void*
 menu_poll(void* vargp) {
     /* Threaded function to be polled */
     while(mainIsRunning) {
+
+        if(gpioRead(GPIO_INT_ROT_SW)) {
+            if(homeSwitchPressedTime++ >= SHUTDOWN_PRESS_TIME) {
+                printf("*** SHUTDOWN ***\n");
+                // shutdown_switch_pressed();
+            }
+        }
 
         if(last_poll_time > 0) {
             last_poll_time--;
@@ -92,7 +108,7 @@ usbdrive_poll(void* vargp) {
 
                     usb_copy_files();
 
-		    sleep(10); 	// Give some time to remove the drive again
+		            sleep(10); 	// Give some time to remove the drive again
 
                     /* umount drive again */
                     FILE *f_umount = popen("umount /media/usb/", "r");
