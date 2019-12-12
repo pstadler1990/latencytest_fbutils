@@ -1,0 +1,16 @@
+[Unit]
+Description=FBUtils service
+ConditionPathExists=/home/pi/Software/latencytest_fbutils/fbutils
+After=network.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+User=root
+
+WorkingDirectory=/home/pi/Software/latencytest_fbutils/
+ExecStart=/home/pi/Software/latencytest_fbutils/fbutils
+
+[Install]
+WantedBy=multi-user.target
