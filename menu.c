@@ -61,8 +61,7 @@ menu_poll(void* vargp) {
 
         if(gpioRead(GPIO_INT_ROT_SW)) {
             if(homeSwitchPressedTime++ >= SHUTDOWN_PRESS_TIME) {
-                printf("*** SHUTDOWN ***\n");
-                // shutdown_switch_pressed();
+                shutdown_switch_pressed();
             }
         }
 
@@ -111,8 +110,7 @@ usbdrive_poll(void* vargp) {
 		            sleep(10); 	// Give some time to remove the drive again
 
                     /* umount drive again */
-                    FILE *f_umount = popen("umount /media/usb/", "r");
-                    pclose(f_umount);
+                    system("umount /media/usb/");
 
                     usbDriveInserted = false;
                 }
@@ -129,9 +127,8 @@ static void
 usb_copy_files(void) {
     /* Copies all .csv files from the results dir onto the mounted usb drive */
     usbDriveCopied = false;
-    char dir[100];
-    sprintf(dir, "cp %s/*.csv /media/usb/ 2>&1", RESULT_OUTPUT_DIR);
-    FILE *f = popen(dir, "r");
-    pclose(f);
+    char dirCommand[100];
+    sprintf(dirCommand, "cp %s/*.csv /media/usb/ 2>&1", RESULT_OUTPUT_DIR);
+    system(dirCommand);
     usbDriveCopied = true;
 }
