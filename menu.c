@@ -107,11 +107,9 @@ usbdrive_poll(void* vargp) {
 
                     usb_copy_files();
 
-		            sleep(10); 	// Give some time to remove the drive again
-
                     /* umount drive again */
                     system("umount /media/usb/");
-
+		            sleep(10); 	/* Give some time to remove the drive again */
                     usbDriveInserted = false;
                 }
                 pclose(f);
@@ -127,8 +125,6 @@ static void
 usb_copy_files(void) {
     /* Copies all .csv files from the results dir onto the mounted usb drive */
     usbDriveCopied = false;
-    char dirCommand[100];
-    sprintf(dirCommand, "cp %s/*.csv /media/usb/ 2>&1", RESULT_OUTPUT_DIR);
-    system(dirCommand);
+    system("cp /home/pi/Software/latencytest_fbutils/results/*.csv /media/usb/results/ 2>&1");
     usbDriveCopied = true;
 }
