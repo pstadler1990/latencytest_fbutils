@@ -164,8 +164,9 @@ draw_screen_test(struct FbDev* fb_device) {
         /*  Send TRIGGER to STM8 */
         gpioWrite(GPIO_EXT_TRIGGER_OUT, 1);
 
-        fb_update(fb_device);
         clock_t time_start = clock();
+        fb_update(fb_device);
+        clock_t time_end = clock();
 
         /* Wait until MEAS_COMPLETE pin is set by STM8 */
         if(!uart_receive_response(7, "MEAS OK", false)) {
@@ -174,7 +175,7 @@ draw_screen_test(struct FbDev* fb_device) {
                 break;
             }
         }
-        clock_t time_end = clock();
+
         execTimes[m_done] = ((double)(time_end - time_start) / CLOCKS_PER_SEC);
         m_done++;
     }
@@ -252,7 +253,7 @@ draw_screen_test(struct FbDev* fb_device) {
         // ...
 
         /* Write data labels */
-        fprintf(file, "Timestamp, Test#, Device name, tGesamt, tUmschalt\n");
+        fprintf(file, "Timestamp, Test#, Device name, tGesamt, tGesamtRaw, tUmschalt, tUmschaltRaw\n");
     } else {
         printf("Could not open file %s, exit\n", fileName);
         return;
@@ -267,19 +268,21 @@ draw_screen_test(struct FbDev* fb_device) {
 
     for(uint32_t i = 0; i < DEFAULT_N_MEASUREMENTS; i++) {
         /* Calculate average etc. */
+        double tGesamtRaw = measurements[i].tWhite - measurements[i].tTrigger;
         double tGesamt = (measurements[i].tWhite - measurements[i].tTrigger) - execTimes[i];
         uint32_t tGesamtDigit = measurements[i].tWhite - measurements[i].tTrigger;
-        uint32_t tUmschalt = measurements[i].tWhite - measurements[i].tBlack;
+        uint32_t tUmschaltRaw = measurements[i].tWhite - measurements[i].tBlack;
+        double tUmschalt = (measurements[i].tWhite - measurements[i].tBlack) - execTimes[i];
 
         if(i > 1 && i < DEFAULT_N_MEASUREMENTS - 2) {
             mBufGesamt[i] = tGesamtDigit;
-            mBufUmschalt[i] = tUmschalt;
+            mBufUmschalt[i] = tUmschaltRaw;
 
             tSum += tGesamt;
             tSumUmschalt += tUmschalt;
 
             /* Write meta headers and actual data */
-            fprintf(file, "%d, %d, %s, %f, %d\n", (int)time(NULL), testNumber, framebuf_state.displayName, tGesamt, tUmschalt);
+            fprintf(file, "%d, %d, %s, %f, %f, %f, %d\n", (int)time(NULL), testNumber, framebuf_state.displayName, tGesamt, tGesamtRaw, tUmschalt, tUmschaltRaw);
 
             n++;
         }
