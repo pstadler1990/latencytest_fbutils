@@ -32,7 +32,8 @@ typedef enum {
 typedef enum {
     FBCOLOR_B2W,
     FBCOLOR_B2R,
-    FBCOLOR_R2G
+    FBCOLOR_R2G,
+    FBCOLOR_SID,
 } FB_COLORMODE;
 
 struct FbDevState {

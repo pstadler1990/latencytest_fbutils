@@ -84,6 +84,7 @@ uart_send_command(UART_CTRL_COMMAND command, bool timed) {
             printf("Failed to send command, exit\n");
             break;
         }
+//	usleep(1000);
         sleep(1);
     }
     return 0;

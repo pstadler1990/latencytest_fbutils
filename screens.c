@@ -113,6 +113,9 @@ draw_screen_home(struct FbDev* fb_device) {
 	    case FBCOLOR_R2G:
 		sprintf(color_mode_str, "Blue to green");
 		break;
+	    case FBCOLOR_SID:
+		sprintf(color_mode_str, "SID mode");
+		break;
 	}
 	sprintf(test_colorm_str, "Color mode: %s", color_mode_str);
 	fb_draw_rect(fb_device, 0, 140, w / 2, 20, COLOR_YELLOW, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
@@ -171,6 +174,7 @@ draw_screen_test(struct FbDev* fb_device) {
     uint32_t m_done = 0;
     uint32_t m_failed = 0;  /* Failed measurements */
     bool m_failed_test = false;
+    uint32_t single_m = 0;
 
     /* Wait for trigger reception from STM8 to synchronize the measurements */
     if(!uart_send_command(CTRL_CMD_TEST_MODE, false)) {
@@ -183,7 +187,11 @@ draw_screen_test(struct FbDev* fb_device) {
     gpioWrite(GPIO_EXT_START_LED, 1);
     gpioWrite(GPIO_EXT_CALIB_LED, 0);
 
-    while(m_done < DEFAULT_N_MEASUREMENTS) {
+    /* Get measurements from slave device */
+    struct Measurement measurements[DEFAULT_SINGLE_MEASURES][DEFAULT_N_MEASUREMENTS];
+    uint32_t timestamp[DEFAULT_SINGLE_MEASURES];
+
+    while(m_done < DEFAULT_SINGLE_MEASURES/*DEFAULT_N_MEASUREMENTS*/) {
         /* Show black screen */
 	if(framebuf_state.colorm != FBCOLOR_R2G) {
 	        fb_clear_screen(fb_device);
@@ -213,85 +221,92 @@ draw_screen_test(struct FbDev* fb_device) {
 	/* Wait for VSYNC */
 	while(!vsync_flag);
 
-    fb_update(fb_device);
+	printf("VSYNC received, white screen\n");
+
+   	fb_update(fb_device);
 	clock_gettime(CLOCK_REALTIME, &gettime_now);
 
-        /* Wait until MEAS_COMPLETE pin is set by STM8 */
-        if(!uart_receive_response(7, "MEAS OK", false)) {
-            if(++m_failed >= MAX_FAILED_MEASUREMENTS) {
-                m_failed_test = true;
-                break;
-            }
-        }
+	memset(receiveBuf, 0, sizeof(uint8_t) * (DEFAULT_N_MEASUREMENTS + 1));
 
-        execTimes[m_done] = (double)(gettime_now.tv_nsec - time_start) / 1.0e6;/*((double)(time_end - time_start) / (CLOCKS_PER_SEC / 1000));*/
-        m_done++;
+	bool is_receiving = true;
+	int receiveStatus = -1;
+	uint32_t receivePtr = 0;
+	bool has_package = false;
+	uint32_t measurementTmpBuf[3];
+	uint32_t m_index = 0;
+	uint32_t lastReceivedTimeout = MEASUREMENT_TIMEOUT;
+
+	while(is_receiving) {
+		if((receivePtr >= (DEFAULT_N_MEASUREMENTS-2)) || --lastReceivedTimeout == 0) {
+			is_receiving = false;
+		}
+
+		receiveStatus = uart_receive(receiveBuf, BUF_SIZE);
+
+		if(receiveStatus != -1) {
+
+			lastReceivedTimeout = MEASUREMENT_TIMEOUT;
+
+			if(strncmp("{", receiveBuf, 1) == 0) {
+				/* Begin of new measurement package */
+				has_package = true;
+				printf("New measurement data packet (%d)\n", receivePtr);
+			} else if(strncmp("}", receiveBuf, 1) == 0) {
+				/* End of measurement package */
+				receivePtr++;
+				has_package = false;
+			} else {
+				/* Should be measurement data */
+				if(has_package && m_index < 2) {
+					uint32_t num = (uint32_t) strtoll(receiveBuf, NULL, 10);
+					measurementTmpBuf[m_index] = num;
+					if(m_index + 1 < 2) {
+						m_index++;
+					} else {
+						/* Received three values */
+						measurements[single_m][receivePtr].tTrigger = measurementTmpBuf[0];
+						measurements[single_m][receivePtr].tBlack = measurementTmpBuf[1];
+						//measurements[receivePtr].tWhite = measurementTmpBuf[2];
+						m_index = 0;
+						printf("Measurement data -> time: %d, digit: %d\n", measurementTmpBuf[0], measurementTmpBuf[1]);
+					}
+				}
+			}
+		}
+	};
+	/* Receive final 50% reached timestamp */
+	if(uart_receive_response(1, "T", false)) {
+		printf("50 timestamp received..\n");	
+	}
+	bool isReceiving = true;
+	char timestampBuf[10];
+//	uint32_t timestamp = 0;
+	while(isReceiving) {
+		receiveStatus = uart_receive(timestampBuf, 10);
+		if(receiveStatus != -1) {
+			uint32_t num = (uint32_t) strtoll(timestampBuf, NULL, 10);
+			if(num > 0) {
+				isReceiving = false;
+				timestamp[single_m] = num;
+				printf("Timestamp received: %d\n", timestamp[single_m]);
+			}
+		}
+	}
+	execTimes[m_done] = (double)(gettime_now.tv_nsec - time_start) / 1.0e6;/*((double)(time_end - time_start) / (CLOCKS_PER_SEC / 1000));*/
+	m_done++;
 	vsync_flag = 0;
 	enable_cb = 0;
+	single_m++;
+	printf("**** COMPLETED MEASUREMENT %d of %d\n", m_done, DEFAULT_SINGLE_MEASURES);
     }
 
     /* Completed measurements */
     fb_clear_screen(fb_device);
     fb_update(fb_device);
 
-    memset(receiveBuf, 0, sizeof(uint8_t) * (DEFAULT_N_MEASUREMENTS + 1));
-
-    /* Get measurements from slave device */
-    if(!uart_send_command(CTRL_CMD_GET_MEASURES, false)) {
-        printf("Failed to set measurement command, exit!\n");
-        return;
-    }
-
-    struct Measurement measurements[DEFAULT_N_MEASUREMENTS];
-
-    bool is_receiving = true;
-    int receiveStatus = -1;
-    uint32_t receivePtr = 0;
-    bool has_package = false;
-    uint32_t measurementTmpBuf[3];
-    uint32_t m_index = 0;
-    uint32_t lastReceivedTimeout = MEASUREMENT_TIMEOUT;
-
-    while(is_receiving) {
-        if((receivePtr + 1 > DEFAULT_N_MEASUREMENTS) || --lastReceivedTimeout == 0) {
-            is_receiving = false;
-        }
-
-        receiveStatus = uart_receive(receiveBuf, BUF_SIZE);
-
-        if(receiveStatus != -1) {
-
-            lastReceivedTimeout = MEASUREMENT_TIMEOUT;
-
-            if(strncmp("{", receiveBuf, 1) == 0) {
-                /* Begin of new measurement package */
-                has_package = true;
-            } else if(strncmp("}", receiveBuf, 1) == 0) {
-                /* End of measurement package */
-                receivePtr++;
-                has_package = false;
-            } else {
-                /* Should be measurement data */
-                if(has_package && m_index < 3) {
-                    uint32_t num = (uint32_t) strtoll(receiveBuf, NULL, 10);
-                    measurementTmpBuf[m_index] = num;
-                    if(m_index + 1 < 3) {
-                        m_index++;
-                    } else {
-                        /* Received three values */
-                        measurements[receivePtr].tTrigger = measurementTmpBuf[0];
-                        measurements[receivePtr].tBlack = measurementTmpBuf[1];
-                        measurements[receivePtr].tWhite = measurementTmpBuf[2];
-                        m_index = 0;
-                    }
-                }
-            }
-        }
-    };
-
     /* Write to file */
     char fileName[128];
-    sprintf(fileName, "%s/%s_%d.csv", RESULT_OUTPUT_DIR, framebuf_state.displayName, testNumber);
+    sprintf(fileName, "%s/sid_%s_%d.csv", RESULT_OUTPUT_DIR, framebuf_state.displayName, testNumber);
     FILE* file = fopen(fileName, "w");
     if(file) {
         // [ META DATA ]
@@ -303,7 +318,8 @@ draw_screen_test(struct FbDev* fb_device) {
         // ...
 
         /* Write data labels */
-        fprintf(file, "Timestamp, Test#, Device name, tGesamt, tGesamtRaw, tUmschalt, tUmschaltRaw, tWhite, tBlack, execTimes\n");
+        //fprintf(file, "Timestamp, Test#, Device name, tGesamt, tGesamtRaw, tUmschalt, tUmschaltRaw, tWhite, tBlack, execTimes\n");
+		fprintf(file, "Timestamp, Test#, Device name, Single#, t, digit, reached 50 t\n");
     } else {
         printf("Could not open file %s, exit\n", fileName);
         return;
@@ -313,16 +329,17 @@ draw_screen_test(struct FbDev* fb_device) {
     double tSum = 0;
     double tSumUmschalt = 0;
     uint32_t n = 0;
-    uint32_t mBufGesamt[DEFAULT_N_MEASUREMENTS - 4];
-    uint32_t mBufUmschalt[DEFAULT_N_MEASUREMENTS - 4];
+//    uint32_t mBufGesamt[DEFAULT_N_MEASUREMENTS - 4];
+//    uint32_t mBufUmschalt[DEFAULT_N_MEASUREMENTS - 4];
 
-    for(uint32_t i = 0; i < DEFAULT_N_MEASUREMENTS; i++) {
+    for(uint32_t i = 1; i < DEFAULT_SINGLE_MEASURES/*DEFAULT_N_MEASUREMENTS*/; i++) {
         /* Calculate average etc. */
 //	if(execTimes[i] < 0 ||execTimes[i] > (measurements[i].tWhite - measurements[i].tTrigger)) {
 //		execTimes[i] = 0;
 //	}
 //	execTimes[i] /= 2;
 
+#ifdef REMOVE_ME
         double tGesamtRaw = measurements[i].tWhite - measurements[i].tTrigger;
         double tGesamt = (measurements[i].tWhite - measurements[i].tTrigger) - execTimes[i];
         uint32_t tGesamtDigit = measurements[i].tWhite - measurements[i].tTrigger;
@@ -347,11 +364,21 @@ draw_screen_test(struct FbDev* fb_device) {
 
             n++;
         }
+#endif
+	for(uint32_t j = 0; j < DEFAULT_N_MEASUREMENTS; j++) {
+		fprintf(file, "%d, %d, %s, %d, %d, %d, %d\n", (int)time(NULL), testNumber, 
+				framebuf_state.displayName,
+				i,
+				measurements[i][j].tTrigger,
+				measurements[i][j].tBlack,
+				timestamp[i]);
+	}
     }
 
     /* Finished writing to data */
     fclose(file);
 
+#ifdef REMOVE_ME
     tAvg = tSum / n;
     tAvgUmschalt = tSumUmschalt / n;
 
@@ -369,44 +396,44 @@ draw_screen_test(struct FbDev* fb_device) {
     if(maxGesamt < 0) maxGesamt = 0;
     if(minUmschalt < 0) minUmschalt = 0;
     if(maxUmschalt < 0) maxUmschalt = 0;
-
+#endif
     /* Turn off start switch LED */
     gpioWrite(GPIO_EXT_START_LED, 0);
 
     while(framebuf_state.mode == FBMODE_TEST) {
 
         if(!m_failed_test) {
-            fb_draw_rect(fb_device, 0, 0, w / 2, 300, COLOR_WHITE, DRAW_CENTER_HORIZONTAL);
+            //fb_draw_rect(fb_device, 0, 0, w / 2, 300, COLOR_WHITE, DRAW_CENTER_HORIZONTAL);
 
             fb_draw_rect(fb_device, 0, 0, w / 2, 100, COLOR_GREEN, DRAW_CENTER_HORIZONTAL);
             char m_complete_info[100];
-            sprintf(m_complete_info, "Measurement valid (%d/%d failed)", m_failed, DEFAULT_N_MEASUREMENTS);
+            sprintf(m_complete_info, "Measurement valid (%d/%d failed)", m_failed, DEFAULT_SINGLE_MEASURES);
             fb_draw_text(fb_device, m_complete_info, 0, 40, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
 
             /* Results */
-            char str_dataAvg[50];
-            sprintf(str_dataAvg, "Average display lag: %f ms", tAvg);
-            fb_draw_text(fb_device, str_dataAvg, 0, 120, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+            //char str_dataAvg[50];
+            //sprintf(str_dataAvg, "Average display lag: %f ms", tAvg);
+            //fb_draw_text(fb_device, str_dataAvg, 0, 120, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
 
-            char str_dataAvgUmschalt[50];
-            sprintf(str_dataAvgUmschalt, "Average switching times: %f ms", tAvgUmschalt);
-            fb_draw_text(fb_device, str_dataAvgUmschalt, 0, 150, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+            //char str_dataAvgUmschalt[50];
+            //sprintf(str_dataAvgUmschalt, "Average switching times: %f ms", tAvgUmschalt);
+            //fb_draw_text(fb_device, str_dataAvgUmschalt, 0, 150, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
 
-            char str_dataMedianGesamt[50];
-            sprintf(str_dataMedianGesamt, "Median total lag: %u ms", medianGesamt);
-            fb_draw_text(fb_device, str_dataMedianGesamt, 0, 180, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+            //char str_dataMedianGesamt[50];
+            //sprintf(str_dataMedianGesamt, "Median total lag: %u ms", medianGesamt);
+            //fb_draw_text(fb_device, str_dataMedianGesamt, 0, 180, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
 
-            char str_dataMedianUmschalt[50];
-            sprintf(str_dataMedianUmschalt, "Median switching times: %u ms", medianUmschalt);
-            fb_draw_text(fb_device, str_dataMedianUmschalt, 0, 210, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+            //char str_dataMedianUmschalt[50];
+            //sprintf(str_dataMedianUmschalt, "Median switching times: %u ms", medianUmschalt);
+            //fb_draw_text(fb_device, str_dataMedianUmschalt, 0, 210, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
 
-            char str_dataMinMaxGesamt[50];
-            sprintf(str_dataMinMaxGesamt, "Min total lag: %u ms | Max total lag: %u ms", minGesamt, maxGesamt);
-            fb_draw_text(fb_device, str_dataMinMaxGesamt, 0, 240, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+           // char str_dataMinMaxGesamt[50];
+            //sprintf(str_dataMinMaxGesamt, "Min total lag: %u ms | Max total lag: %u ms", minGesamt, maxGesamt);
+            //fb_draw_text(fb_device, str_dataMinMaxGesamt, 0, 240, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
 
-            char str_dataMinMaxUmschalt[50];
-            sprintf(str_dataMinMaxUmschalt, "Min switching: %u ms | Max switching: %u ms", minUmschalt, maxUmschalt);
-            fb_draw_text(fb_device, str_dataMinMaxUmschalt, 0, 270, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
+//            char str_dataMinMaxUmschalt[50];
+  //          sprintf(str_dataMinMaxUmschalt, "Min switching: %u ms | Max switching: %u ms", minUmschalt, maxUmschalt);
+    //        fb_draw_text(fb_device, str_dataMinMaxUmschalt, 0, 270, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
         } else {
             fb_draw_rect(fb_device, 0, 0, w / 2, 200, COLOR_WHITE, DRAW_CENTER_HORIZONTAL);
             fb_draw_text(fb_device, "- Press START to retry -", 0, 145, COLOR_BLACK, DRAW_CENTER_HORIZONTAL);
@@ -418,6 +445,8 @@ draw_screen_test(struct FbDev* fb_device) {
         /* Update buffers */
         fb_update(fb_device);
     }
+//#endif
+
 }
 
 void
@@ -428,10 +457,13 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
 
     framebuf_state.isCalibrated = false;
 
-    if(!uart_send_command(CTRL_CMD_CALIB_MODE, true)) {
+    if(!uart_send_command(CTRL_CMD_CALIB_MODE, false)) {
         /* Failed to set STM8 in calibration mode, exit */
+	printf("FAILED TO ENABLE CALIB MODE\n");
         return;
     }
+
+    printf("Calib mode on\n");
 
     /* Turn on calib switch LED */
     gpioWrite(GPIO_EXT_CALIB_LED, 1);
@@ -444,54 +476,72 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
 
     /* STM8 is in calibration mode */
     while(1) {
-        /* Show black screen */
-        fb_clear_screen(fb_device);
-	if(framebuf_state.colorm != FBCOLOR_R2G) {
-	    fb_clear_screen(fb_device);
-	} else {
-	    fb_draw_filled_screen(fb_device, COLOR_BLUE);
+	if(framebuf_state.colorm == FBCOLOR_SID) {
+	    printf("SID Mode calibration\n");
+ 	    fb_draw_filled_screen(fb_device, COLOR_50GRAY);
+	    fb_update(fb_device);
+	    sleep(1);
+	    if(!uart_send_command(CTRL_CMD_CALIB_BLACK, false)) {
+		m_failed_test = true;
+		break;
+	    }
 	}
+       	else {
 
-        fb_update(fb_device);
-        sleep(1);
+	        /* Show black screen */
+	        fb_clear_screen(fb_device);
+		if(framebuf_state.colorm != FBCOLOR_R2G) {
+		    fb_clear_screen(fb_device);
+		} else {
+		    fb_draw_filled_screen(fb_device, COLOR_BLUE);
+		}
 
-        if(!uart_send_command(CTRL_CMD_CALIB_BLACK, false)) {
-            m_failed_test = true;
-            break;
-        }
+	        fb_update(fb_device);
+	        sleep(1);
 
-        /* Wait for device's response */
-        if(!uart_receive_response(8, "BLACK OK", false)) {
-            m_failed_test = true;
-            break;
-        }
+	        if(!uart_send_command(CTRL_CMD_CALIB_BLACK, false)) {
+	            m_failed_test = true;
+	            break;
+	        }
 
-        /* Show white screen */
-        switch(framebuf_state.colorm) {
-	   default:
-	   case FBCOLOR_B2W:
-		fb_draw_filled_screen(fb_device, COLOR_WHITE);
-		break;
-	   case FBCOLOR_B2R:
-		fb_draw_filled_screen(fb_device, COLOR_RED);
-		break;
-	   case FBCOLOR_R2G:
-       		fb_draw_filled_screen(fb_device, COLOR_GREEN);
-		break;
+	        /* Wait for device's response */
+	        if(!uart_receive_response(8, "BLACK OK", false)) {
+	            m_failed_test = true;
+	            break;
+	        }
+
+	        /* Show white screen */
+	        switch(framebuf_state.colorm) {
+		   default:
+		   case FBCOLOR_B2W:
+			fb_draw_filled_screen(fb_device, COLOR_WHITE);
+			break;
+		   case FBCOLOR_B2R:
+			fb_draw_filled_screen(fb_device, COLOR_RED);
+			break;
+		   case FBCOLOR_R2G:
+	       		fb_draw_filled_screen(fb_device, COLOR_GREEN);
+			break;
+		}
+		//fb_draw_rect(fb_device, w/3, 0, w/3, h, COLOR_RED, DRAW_CENTER_NONE);
+		//fb_draw_rect(fb_device, (w/3)*2, 0, w/3, h, COLOR_GREEN, DRAW_CENTER_NONE);
+		fb_update(fb_device);
+	        sleep(1);
+
+	        if(!uart_send_command(CTRL_CMD_CALIB_WHITE, true)) {
+	            m_failed_test = true;
+	            break;
+	        }
 	}
-	//fb_draw_rect(fb_device, w/3, 0, w/3, h, COLOR_RED, DRAW_CENTER_NONE);
-	//fb_draw_rect(fb_device, (w/3)*2, 0, w/3, h, COLOR_GREEN, DRAW_CENTER_NONE);
-	fb_update(fb_device);
-        sleep(1);
-
-        if(!uart_send_command(CTRL_CMD_CALIB_WHITE, true)) {
-            m_failed_test = true;
-            break;
-        }
+	if(!uart_receive_response(8, "BLACK OK", false)) {
+	    m_failed_test = true;
+	    printf("Received no black ok\n");
+	}
 
         if(!uart_receive_response(8, "CALIB OK", false)) {
             m_failed_test = true;
         }
+	printf("Received CALIB OK\n");
 
         bool is_receiving = true;
         bool has_package = false;
@@ -596,7 +646,7 @@ menu_rot_changed(ROT_STATE state) {
                     /* Increase test number */
                     testNumber++;
 		} else {
-		   if(framebuf_state.colorm == 2) {
+		   if(framebuf_state.colorm == 3) {
 			framebuf_state.colorm = 0;
 		   } else {
 			   framebuf_state.colorm +=1;
@@ -619,7 +669,7 @@ menu_rot_changed(ROT_STATE state) {
                 	}
 		} else {
 	    		if(framebuf_state.colorm == 0) {
-			    framebuf_state.colorm = 2;
+			    framebuf_state.colorm = 3;
 			} else {
 			    framebuf_state.colorm--;
 			}

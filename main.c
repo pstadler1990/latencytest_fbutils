@@ -12,10 +12,10 @@
 
 struct FbDevState framebuf_state = {
         .state = FBSTATE_INITIALIZE,
-		.homesw_mode = 0,
+	.homesw_mode = 0,
         .n_measurements = DEFAULT_N_MEASUREMENTS,
         .mode = FBMODE_HOME,
-		.colorm = FBCOLOR_B2W,
+	.colorm = FBCOLOR_B2W,
         .isCalibrated = false,
 };
 int uart0_filestream = -1;

@@ -42,9 +42,9 @@ calib_switch_pressed(void) {
 void
 start_switch_pressed(void) {
     /* */
-    if(!framebuf_state.isCalibrated) {
-        return;
-    }
+//    if(!framebuf_state.isCalibrated) {
+//        return;
+//    }
     framebuf_state.mode = FBMODE_TEST;
     framebuf_state.state = FBSTATE_INITIALIZE;
 }

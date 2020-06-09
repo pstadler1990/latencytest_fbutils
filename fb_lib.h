@@ -14,6 +14,7 @@
 #define COLOR_BLUE      ((uint32_t)0x000000FF)
 #define COLOR_YELLOW    ((uint32_t)0x00FFFF00)
 #define COLOR_MAGENTA   ((uint32_t)0x00FF00FF)
+#define COLOR_50GRAY	((uint32_t)0x007F7F7F)
 
 /* Flags for drawing helpers */
 #define DRAW_CENTER_VERTICAL    ((uint32_t)0x1)
