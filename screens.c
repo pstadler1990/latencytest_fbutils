@@ -15,12 +15,21 @@
 #include "communication.h"
 #include "calculations.h"
 #include "menu.h"
+#include "bcm_host.h"
 
+extern struct FbDev framebuf_device;
 extern struct FbDevState framebuf_state;
 extern bool usbDriveInserted;
 extern bool usbDriveCopied;
 
 static uint32_t testNumber = 0;
+static void vsync_func(DISPMANX_UPDATE_HANDLE_T u, void* arg);
+
+bool vsync_flag = 0;
+bool enable_cb = 0;
+long int time_start;
+long int time_end;
+struct timespec gettime_now;
 
 void
 draw_screen_home(struct FbDev* fb_device) {
@@ -47,10 +56,12 @@ draw_screen_home(struct FbDev* fb_device) {
     char display_info_str[50];
     char bpp_info_str[20];
     char display_name_str[EDID_MAX_DISPLAY_NAME + 20];
+    char timing_str[30];
 
     sprintf(display_info_str, "Screen Resolution: %dx%d", w, h);
     sprintf(bpp_info_str, "Color depth: %d", fb_device->bpp);
     sprintf(display_name_str, "Display name: %s", framebuf_state.displayName);
+    sprintf(timing_str, "Left margin: %d", fb_device->timing);
 
     /* Drawing idle / welcome screen
        This screen can only be exit on external triggers
@@ -73,19 +84,39 @@ draw_screen_home(struct FbDev* fb_device) {
         fb_draw_text(fb_device, display_name_str, 0, 0, COLOR_BLACK, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
         fb_draw_text(fb_device, display_info_str, 0, 20, COLOR_BLACK, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
         fb_draw_text(fb_device, bpp_info_str, 0, 40, COLOR_BLACK, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+        fb_draw_text(fb_device, timing_str, 0, 60, COLOR_RED, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
 
         if (!framebuf_state.isCalibrated) {
-	    fb_draw_rect(fb_device, 0, 140, w / 2, 60, COLOR_RED, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
-            fb_draw_text(fb_device, "* Device is not calibrated yet - please calibrate first *", 0, 140, COLOR_WHITE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+	    fb_draw_rect(fb_device, 0, 160, w / 2, 60, COLOR_RED, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+            fb_draw_text(fb_device, "* Device is not calibrated yet - please calibrate first *", 0, 160, COLOR_WHITE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
         } else {
-	    fb_draw_rect(fb_device, 0, 140, w / 2, 60, COLOR_BLUE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
-            fb_draw_text(fb_device, "- Ready! Press START to begin measurements -", 0, 140, COLOR_WHITE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+	    fb_draw_rect(fb_device, 0, 160, w / 2, 60, COLOR_BLUE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+            fb_draw_text(fb_device, "- Ready! Press START to begin measurements -", 0, 160, COLOR_WHITE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
         }
 
         char test_number_str[50];
         sprintf(test_number_str, "Test number: %d", testNumber);
         fb_draw_rect(fb_device, 0, 100, w / 2, 20, COLOR_BLACK, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
         fb_draw_text(fb_device, test_number_str, 0, 100, COLOR_WHITE, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+
+	/* Color mode selection */
+	char test_colorm_str[50];
+	char color_mode_str[20];
+	switch(framebuf_state.colorm) {
+	    default:
+	    case FBCOLOR_B2W:
+		sprintf(color_mode_str, "Black to white");
+		break;
+	    case FBCOLOR_B2R:
+		sprintf(color_mode_str, "Black to red");
+		break;
+	    case FBCOLOR_R2G:
+		sprintf(color_mode_str, "Blue to green");
+		break;
+	}
+	sprintf(test_colorm_str, "Color mode: %s", color_mode_str);
+	fb_draw_rect(fb_device, 0, 140, w / 2, 20, COLOR_YELLOW, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
+	fb_draw_text(fb_device, test_colorm_str, 0, 140, COLOR_BLACK, DRAW_CENTER_HORIZONTAL | DRAW_CENTER_VERTICAL);
 
         /* USB drive copy dialog */
         if(usbDriveInserted) {
@@ -122,11 +153,16 @@ void
 draw_screen_test(struct FbDev* fb_device) {
 
 #define BUF_SIZE ((uint32_t)DEFAULT_N_MEASUREMENTS * 2)
-
-    // TODO: Add check for isCalibrated -> if not: show message and return to home!
-
     uint32_t w = fb_device->w;
     uint32_t h = fb_device->h;
+
+    bcm_host_init();
+
+    DISPMANX_DISPLAY_HANDLE_T* display;
+    display = vc_dispmanx_display_open(0/*DISPMANX_ID_HDMI0*/);
+    vc_dispmanx_vsync_callback(display, NULL, NULL);
+    vc_dispmanx_vsync_callback(display, vsync_func, fb_device);
+
     char receiveBuf[BUF_SIZE];
 
     double execTimes[BUF_SIZE];
@@ -149,24 +185,36 @@ draw_screen_test(struct FbDev* fb_device) {
 
     while(m_done < DEFAULT_N_MEASUREMENTS) {
         /* Show black screen */
-        fb_clear_screen(fb_device);
+	if(framebuf_state.colorm != FBCOLOR_R2G) {
+	        fb_clear_screen(fb_device);
+	} else {
+		fb_draw_filled_screen(fb_device, COLOR_BLUE);
+	}
+
         fb_update(fb_device);
 
         gpioWrite(GPIO_EXT_TRIGGER_OUT, 0);
 
-        srand(time(0));
-        usleep(((rand() % 500) + 1000) * 1000);
+       	switch(framebuf_state.colorm) {
+		default:
+		case FBCOLOR_B2W:
+	 	    fb_draw_filled_screen(fb_device, COLOR_WHITE);
+		    break;
+		case FBCOLOR_B2R:
+		    fb_draw_filled_screen(fb_device, COLOR_RED);
+		    break;
+		case FBCOLOR_R2G:
+		    fb_draw_filled_screen(fb_device, COLOR_GREEN);
+		    break;
+	}
 
-        fb_draw_filled_screen(fb_device, COLOR_WHITE);
-        //fb_draw_rect(fb_device, 0, 0, 150, 150, COLOR_WHITE, DRAW_CENTER_NONE);
-        //fb_draw_rect(fb_device, w - 150, h - 150, 150, 150, COLOR_WHITE, DRAW_CENTER_NONE);
+	usleep(200000);
+	enable_cb = 1;
+	/* Wait for VSYNC */
+	while(!vsync_flag);
 
-        /*  Send TRIGGER to STM8 */
-        gpioWrite(GPIO_EXT_TRIGGER_OUT, 1);
-
-        clock_t time_start = clock();
-        fb_update(fb_device);
-        clock_t time_end = clock();
+    fb_update(fb_device);
+	clock_gettime(CLOCK_REALTIME, &gettime_now);
 
         /* Wait until MEAS_COMPLETE pin is set by STM8 */
         if(!uart_receive_response(7, "MEAS OK", false)) {
@@ -176,8 +224,10 @@ draw_screen_test(struct FbDev* fb_device) {
             }
         }
 
-        execTimes[m_done] = ((double)(time_end - time_start) / CLOCKS_PER_SEC);
+        execTimes[m_done] = (double)(gettime_now.tv_nsec - time_start) / 1.0e6;/*((double)(time_end - time_start) / (CLOCKS_PER_SEC / 1000));*/
         m_done++;
+	vsync_flag = 0;
+	enable_cb = 0;
     }
 
     /* Completed measurements */
@@ -253,7 +303,7 @@ draw_screen_test(struct FbDev* fb_device) {
         // ...
 
         /* Write data labels */
-        fprintf(file, "Timestamp, Test#, Device name, tGesamt, tGesamtRaw, tUmschalt, tUmschaltRaw\n");
+        fprintf(file, "Timestamp, Test#, Device name, tGesamt, tGesamtRaw, tUmschalt, tUmschaltRaw, tWhite, tBlack, execTimes\n");
     } else {
         printf("Could not open file %s, exit\n", fileName);
         return;
@@ -268,11 +318,22 @@ draw_screen_test(struct FbDev* fb_device) {
 
     for(uint32_t i = 0; i < DEFAULT_N_MEASUREMENTS; i++) {
         /* Calculate average etc. */
+//	if(execTimes[i] < 0 ||execTimes[i] > (measurements[i].tWhite - measurements[i].tTrigger)) {
+//		execTimes[i] = 0;
+//	}
+//	execTimes[i] /= 2;
+
         double tGesamtRaw = measurements[i].tWhite - measurements[i].tTrigger;
         double tGesamt = (measurements[i].tWhite - measurements[i].tTrigger) - execTimes[i];
         uint32_t tGesamtDigit = measurements[i].tWhite - measurements[i].tTrigger;
         uint32_t tUmschaltRaw = measurements[i].tWhite - measurements[i].tBlack;
         double tUmschalt = (measurements[i].tWhite - measurements[i].tBlack) - execTimes[i];
+
+	if(tGesamtRaw < 0) tGesamtRaw = 0;
+	if(tGesamt < 0) tGesamt = 0;
+	if(tGesamtDigit < 0) tGesamtDigit = 0;
+	if(tUmschaltRaw <0) tUmschaltRaw = 0;
+	if(tUmschalt < 0) tUmschalt = 0;
 
         if(i > 1 && i < DEFAULT_N_MEASUREMENTS - 2) {
             mBufGesamt[i] = tGesamtDigit;
@@ -282,7 +343,7 @@ draw_screen_test(struct FbDev* fb_device) {
             tSumUmschalt += tUmschalt;
 
             /* Write meta headers and actual data */
-            fprintf(file, "%d, %d, %s, %f, %f, %f, %d\n", (int)time(NULL), testNumber, framebuf_state.displayName, tGesamt, tGesamtRaw, tUmschalt, tUmschaltRaw);
+            fprintf(file, "%d, %d, %s, %f, %f, %f, %d, %d, %d, %f\n", (int)time(NULL), testNumber, framebuf_state.displayName, tGesamt, tGesamtRaw, tUmschalt, tUmschaltRaw, measurements[i].tWhite, measurements[i].tBlack, execTimes[i]);
 
             n++;
         }
@@ -363,6 +424,7 @@ void
 draw_screen_calib_bw_digits(struct FbDev* fb_device) {
     /* Black and white digits calibration screen */
     uint32_t w = fb_device->w;
+    uint32_t h = fb_device->h;
 
     framebuf_state.isCalibrated = false;
 
@@ -384,6 +446,12 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
     while(1) {
         /* Show black screen */
         fb_clear_screen(fb_device);
+	if(framebuf_state.colorm != FBCOLOR_R2G) {
+	    fb_clear_screen(fb_device);
+	} else {
+	    fb_draw_filled_screen(fb_device, COLOR_BLUE);
+	}
+
         fb_update(fb_device);
         sleep(1);
 
@@ -399,8 +467,21 @@ draw_screen_calib_bw_digits(struct FbDev* fb_device) {
         }
 
         /* Show white screen */
-        fb_draw_filled_screen(fb_device, COLOR_WHITE);
-        fb_update(fb_device);
+        switch(framebuf_state.colorm) {
+	   default:
+	   case FBCOLOR_B2W:
+		fb_draw_filled_screen(fb_device, COLOR_WHITE);
+		break;
+	   case FBCOLOR_B2R:
+		fb_draw_filled_screen(fb_device, COLOR_RED);
+		break;
+	   case FBCOLOR_R2G:
+       		fb_draw_filled_screen(fb_device, COLOR_GREEN);
+		break;
+	}
+	//fb_draw_rect(fb_device, w/3, 0, w/3, h, COLOR_RED, DRAW_CENTER_NONE);
+	//fb_draw_rect(fb_device, (w/3)*2, 0, w/3, h, COLOR_GREEN, DRAW_CENTER_NONE);
+	fb_update(fb_device);
         sleep(1);
 
         if(!uart_send_command(CTRL_CMD_CALIB_WHITE, true)) {
@@ -511,8 +592,16 @@ menu_rot_changed(ROT_STATE state) {
         /* clockwise */
         switch(framebuf_state.mode) {
             case FBMODE_HOME:
-                /* Increase test number */
-                testNumber++;
+		if(!framebuf_state.homesw_mode) {
+                    /* Increase test number */
+                    testNumber++;
+		} else {
+		   if(framebuf_state.colorm == 2) {
+			framebuf_state.colorm = 0;
+		   } else {
+			   framebuf_state.colorm +=1;
+		   }
+		}
                 break;
             default:
                 break;
@@ -521,16 +610,32 @@ menu_rot_changed(ROT_STATE state) {
         /* counter clockwise */
         switch(framebuf_state.mode) {
             case FBMODE_HOME:
-                /* Decrease test number */
-                if(testNumber == 0) {
-                    testNumber = 0;
-                } else {
-                    testNumber--;
-                }
+		if(!framebuf_state.homesw_mode) {
+	                /* Decrease test number */
+        	        if(testNumber == 0) {
+                	    testNumber = 0;
+               		} else {
+                    	   testNumber--;
+                	}
+		} else {
+	    		if(framebuf_state.colorm == 0) {
+			    framebuf_state.colorm = 2;
+			} else {
+			    framebuf_state.colorm--;
+			}
+		}
                 break;
             default:
                 break;
         }
 
     }
+}
+
+void vsync_func(DISPMANX_UPDATE_HANDLE_T u, void* arg) {
+	if(!enable_cb) return;
+	clock_gettime(CLOCK_REALTIME, &gettime_now);
+	time_start = gettime_now.tv_nsec;
+	gpioWrite(GPIO_EXT_TRIGGER_OUT, 1);
+	vsync_flag = 1;
 }

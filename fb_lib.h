@@ -31,6 +31,7 @@ struct FbDev {
     int fb_fd;          /* File descriptor */
     uint32_t w;         /* Visible screen width */
     uint32_t h;         /* Visible screen height */
+    uint32_t timing;
     uint32_t bpp;       /* Bits per pixel (color depth) */
     uint32_t linelen;   /* Pre-calculated horizontal length */
     uint32_t memlen;    /* Pre-calculated memory size */

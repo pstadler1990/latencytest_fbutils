@@ -14,7 +14,7 @@
 
 #define RESULT_OUTPUT_DIR           "results"
 
-#define SHUTDOWN_PRESS_TIME         ((uint32_t)1000000)     /* ~5s */
+#define SHUTDOWN_PRESS_TIME         ((uint32_t)10000000)
 
 /* GPIOs */
 #define GPIO_EXT_TRIGGER_IN         ((unsigned int)5)       /* Physical pin 29, BCM pin 5 */

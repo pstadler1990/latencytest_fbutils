@@ -45,6 +45,7 @@ fb_init(const char* fb_dev_id, struct FbDev* fb_device) {
     fb_device->bpp = vinfo.bits_per_pixel;
     fb_device->linelen = finfo.line_length;
     fb_device->memlen = finfo.smem_len;
+    fb_device->timing = vinfo.left_margin;
 
     /* Map memory */
     fb_device->fbuf = (char *)mmap(0, finfo.smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, fb_device->fb_fd, 0);
@@ -151,7 +152,11 @@ fb_draw_text(const struct FbDev* fb_device, const char* text, int32_t x, int32_t
 
 void
 fb_draw_filled_screen(const struct FbDev* fb_device, uint32_t color) {
-    memset(fb_device->bbuf, color, fb_device->memlen);
+    if(color == COLOR_WHITE) {
+        memset(fb_device->bbuf, color, fb_device->memlen);
+    } else {
+        fb_draw_rect(fb_device, 0, 0, fb_device->w, fb_device->h, color, DRAW_CENTER_NONE);
+    }
 }
 
 void

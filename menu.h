@@ -19,7 +19,6 @@ typedef enum {
 void menu_switch_pressed(void);
 void calib_switch_pressed(void);
 void start_switch_pressed(void);
-void shutdown_switch_pressed(void);
 void* menu_poll(void* vargp);
 void* usbdrive_poll(void* vargp);
 

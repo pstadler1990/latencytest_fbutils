@@ -76,8 +76,6 @@ uart_send_command(UART_CTRL_COMMAND command, bool timed) {
         receiveStatus = uart_receive(receiveBuf, 10);
         if(receiveStatus) {
 
-            printf("rx: %s\n", receiveBuf);
-
             if(strncmp("OK", receiveBuf, 2) == 0) {
                 return 1;
             }

@@ -29,6 +29,7 @@ menu_switch_pressed(void) {
     homeSwitchPressedTime = 0;
     framebuf_state.mode = FBMODE_HOME;
     framebuf_state.state = FBSTATE_IDLE;
+    framebuf_state.homesw_mode = !framebuf_state.homesw_mode;
 }
 
 void

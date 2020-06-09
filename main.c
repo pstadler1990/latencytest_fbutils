@@ -12,8 +12,10 @@
 
 struct FbDevState framebuf_state = {
         .state = FBSTATE_INITIALIZE,
+		.homesw_mode = 0,
         .n_measurements = DEFAULT_N_MEASUREMENTS,
         .mode = FBMODE_HOME,
+		.colorm = FBCOLOR_B2W,
         .isCalibrated = false,
 };
 int uart0_filestream = -1;
@@ -21,10 +23,11 @@ int uart0_filestream = -1;
 bool mainIsRunning = true;
 bool usbDriveInserted = false;
 bool usbDriveCopied = false;
+struct FbDev framebuf_device;
 
 int
 main() {
-    struct FbDev framebuf_device;
+//    struct FbDev framebuf_device;
 
     if(!fb_init("/dev/fb0", &framebuf_device)) {
         perror("Could not access framebuffer, exit");

@@ -29,9 +29,17 @@ typedef enum {
     FBMODE_CALIB,
 } FB_MODE;
 
+typedef enum {
+    FBCOLOR_B2W,
+    FBCOLOR_B2R,
+    FBCOLOR_R2G
+} FB_COLORMODE;
+
 struct FbDevState {
     FB_STATE state;                             /* Internal state machine */
     FB_MODE mode;                               /* Internal mode */
+    FB_COLORMODE colorm;			/* Color mode */
+    uint8_t homesw_mode;
     uint32_t n_measurements;                    /* Number of measurements per series, default = 100 */
 
     bool isCalibrated;
